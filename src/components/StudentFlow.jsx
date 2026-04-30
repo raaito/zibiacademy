@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 const StudentFlow = () => {
   const { user, profile } = useAuth();
@@ -47,8 +48,31 @@ const StudentFlow = () => {
       .order('sequence_number', { ascending: true });
 
     if (data) setQuestions(data);
+
+    // Auto-Save: Check for existing draft in local storage
+    const draftKey = `zibi_exam_draft_${exam.id}`;
+    const savedDraft = localStorage.getItem(draftKey);
+    if (savedDraft) {
+      try {
+        setAnswers(JSON.parse(savedDraft));
+        toast.success('Recovered your previous answers from auto-save.');
+      } catch (err) {
+        console.error('Failed to parse draft', err);
+      }
+    } else {
+      setAnswers({});
+    }
+
     setExamState('taking_exam');
   };
+
+  // Auto-Save: Sync to local storage every time answers change
+  useEffect(() => {
+    if (examState === 'taking_exam' && activeExam) {
+      const draftKey = `zibi_exam_draft_${activeExam.id}`;
+      localStorage.setItem(draftKey, JSON.stringify(answers));
+    }
+  }, [answers, examState, activeExam]);
 
   const logInfraction = async (type, details) => {
     if (!activeExam || !user) return;
@@ -82,12 +106,19 @@ const StudentFlow = () => {
       logInfraction('contextmenu', 'Context menu blocked');
     };
 
+    // Accidental Exit Prevention
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'You have an exam in progress. Are you sure you want to leave?';
+    };
+
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("blur", handleBlur);
     document.addEventListener("copy", preventCopyPaste);
     document.addEventListener("paste", preventCopyPaste);
     document.addEventListener("cut", preventCopyPaste);
     document.addEventListener("contextmenu", preventContextMenu);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     // Anti-selection
     document.body.style.userSelect = 'none';
@@ -100,6 +131,7 @@ const StudentFlow = () => {
       document.removeEventListener("paste", preventCopyPaste);
       document.removeEventListener("cut", preventCopyPaste);
       document.removeEventListener("contextmenu", preventContextMenu);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       document.body.style.userSelect = 'auto';
       document.body.style.webkitUserSelect = 'auto';
     };
@@ -136,6 +168,11 @@ const StudentFlow = () => {
       is_graded: false
     });
 
+    // Clear auto-save cache upon successful submission
+    const draftKey = `zibi_exam_draft_${activeExam.id}`;
+    localStorage.removeItem(draftKey);
+
+    toast.success('Assessment submitted successfully!');
     setExamState('finished');
   };
 

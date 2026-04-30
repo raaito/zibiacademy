@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { toast } from 'react-hot-toast';
 
 const CandidateDirectory = () => {
   const [candidates, setCandidates] = useState([]);
   const [cohorts, setCohorts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportConfig, setExportConfig] = useState({
+    personal: true,
+    academic: true,
+    background: false,
+    scores: false
+  });
 
   useEffect(() => {
     fetchData();
@@ -36,12 +44,130 @@ const CandidateDirectory = () => {
     return acc;
   }, {});
 
+  const executeExportCSV = async () => {
+    if (candidates.length === 0) {
+      toast.error("No candidates to export.");
+      return;
+    }
+
+    const toastId = toast.loading("Generating custom report...");
+    setShowExportModal(false);
+
+    try {
+      let candidateScoresMap = {};
+      let allCourseNames = new Set();
+
+      // If scores are requested, we must fetch scripts and assessments
+      if (exportConfig.scores) {
+        const [ { data: scripts }, { data: assessments } ] = await Promise.all([
+          supabase.from('candidate_scripts').select('*'),
+          supabase.from('assessments').select('id, course_name')
+        ]);
+
+        if (scripts && assessments) {
+          const courseMap = assessments.reduce((acc, a) => { acc[a.id] = a.course_name; return acc; }, {});
+          
+          scripts.forEach(script => {
+            const courseName = courseMap[script.assessment_id] || 'Unknown Course';
+            allCourseNames.add(courseName);
+            
+            if (!candidateScoresMap[script.candidate_id]) candidateScoresMap[script.candidate_id] = {};
+            const totalScore = script.is_graded ? (script.auto_mcq_score + script.manual_theory_score) : 'Pending';
+            candidateScoresMap[script.candidate_id][courseName] = totalScore;
+          });
+        }
+      }
+
+      // Build Headers dynamically based on config
+      let headers = [];
+      if (exportConfig.personal) headers.push('Full Name', 'Email', 'Telephone', 'Address');
+      if (exportConfig.academic) headers.push('Matriculation', 'Program Type', 'Semester', 'Cohort', 'Registration Form');
+      if (exportConfig.background) headers.push('Occupation', 'Church Attended', 'Highest Qualification');
+      
+      const courseHeaders = Array.from(allCourseNames).map(name => `${name} (Score)`);
+      if (exportConfig.scores) headers = headers.concat(courseHeaders);
+
+      // Build Rows dynamically
+      const rows = candidates.map(c => {
+        let row = [];
+        if (exportConfig.personal) row.push(`"${c.full_name || ''}"`, `"${c.email || ''}"`, `"${c.telephone || ''}"`, `"${c.address || ''}"`);
+        if (exportConfig.academic) row.push(`"${c.matriculation_number || ''}"`, `"${c.program_type || ''}"`, `"${c.semester || ''}"`, `"${getCohortName(c.cohort_id)}"`, `"${c.registration_type || 'general'}"`);
+        if (exportConfig.background) row.push(`"${c.occupation || ''}"`, `"${c.church_attended || ''}"`, `"${c.highest_qualification || ''}"`);
+        
+        if (exportConfig.scores) {
+          const userScores = candidateScoresMap[c.id] || {};
+          courseHeaders.forEach(ch => {
+            const courseName = ch.replace(' (Score)', '');
+            row.push(`"${userScores[courseName] !== undefined ? userScores[courseName] : 'N/A'}"`);
+          });
+        }
+        return row;
+      });
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `zibi_candidates_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Candidate directory exported successfully!", { id: toastId });
+    } catch (err) {
+      toast.error("Failed to generate export: " + err.message, { id: toastId });
+    }
+  };
+
   return (
     <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-      <header style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '2rem', marginBottom: '2rem' }}>
-        <h2 style={{ color: 'var(--text-ivory)', fontFamily: 'var(--font-heading)' }}>Candidate Directory</h2>
-        <p style={{ color: 'var(--text-muted)' }}>Overview of all registered candidates across academic cycles.</p>
+      <header style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '2rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h2 style={{ color: 'var(--text-ivory)', fontFamily: 'var(--font-heading)' }}>Candidate Directory</h2>
+          <p style={{ color: 'var(--text-muted)' }}>Overview of all registered candidates across academic cycles.</p>
+        </div>
+        <button className="btn-premium primary" onClick={() => setShowExportModal(true)}>
+          Export Custom Report
+        </button>
       </header>
+
+      {showExportModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
+          <div className="glass-panel" style={{ padding: '2rem', width: '100%', maxWidth: '500px', animation: 'fadeIn 0.3s' }}>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem', fontFamily: 'var(--font-heading)' }}>Export Data Selection</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>Select the data points you wish to include in the generated CSV report.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', color: 'var(--text-ivory)' }}>
+                <input type="checkbox" checked={exportConfig.personal} onChange={(e) => setExportConfig({...exportConfig, personal: e.target.checked})} style={{ width: 'auto' }} />
+                <span>Basic Contact Info (Name, Email, Phone, Address)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', color: 'var(--text-ivory)' }}>
+                <input type="checkbox" checked={exportConfig.academic} onChange={(e) => setExportConfig({...exportConfig, academic: e.target.checked})} style={{ width: 'auto' }} />
+                <span>Academic Status (Matriculation, Cohort, Semester)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', color: 'var(--text-ivory)' }}>
+                <input type="checkbox" checked={exportConfig.background} onChange={(e) => setExportConfig({...exportConfig, background: e.target.checked})} style={{ width: 'auto' }} />
+                <span>Background Info (Occupation, Church, Highest Qual.)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', color: 'var(--accent-gold)', padding: '1rem', background: 'var(--bg-obsidian)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <input type="checkbox" checked={exportConfig.scores} onChange={(e) => setExportConfig({...exportConfig, scores: e.target.checked})} style={{ width: 'auto' }} />
+                <span style={{ flex: 1 }}>
+                  <strong style={{ display: 'block' }}>Include Course Scores</strong>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Warning: Export may take longer to generate as it fetches all scripts.</span>
+                </span>
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button className="btn-premium" onClick={() => setShowExportModal(false)} style={{ flex: 1 }}>Cancel</button>
+              <button className="btn-premium primary" onClick={executeExportCSV} style={{ flex: 1 }}>Generate File</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Loading directory...</div>
@@ -168,6 +294,14 @@ const CandidateDetail = () => {
         
         <div style={{ gridColumn: '1 / -1', marginTop: '0.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1.5rem' }}></div>
         
+        <div style={{ gridColumn: '1 / -1' }}>
+          <strong style={{ color: 'var(--text-muted)' }}>Registration Form Used:</strong><br/>
+          <span style={{ color: 'var(--accent-gold)' }}>
+            {candidate.registration_type === 'supernatural' ? 'School of Supernatural (Feb 2026 Session)' : 
+             candidate.registration_type === 'theology' ? 'ZIBI - Theology Course - 2025' : 
+             'ZIBI Application Form (General)'}
+          </span>
+        </div>
         <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: 'var(--text-muted)' }}>Programme Applied For:</strong><br/>{candidate.programme_applied || 'N/A'}</div>
         <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: 'var(--text-muted)' }}>Course of Selection:</strong><br/>{candidate.course_of_selection || 'N/A'}</div>
         <div style={{ gridColumn: '1 / -1' }}><strong style={{ color: 'var(--text-muted)' }}>Reason for Application:</strong><br/>{candidate.reason_for_application || 'N/A'}</div>

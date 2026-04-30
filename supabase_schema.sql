@@ -39,6 +39,7 @@ CREATE TABLE public.profiles (
     research_interest TEXT,
     sponsorship_details TEXT,
     course_of_selection TEXT,
+    registration_type TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

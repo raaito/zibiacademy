@@ -4,9 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { toast } from 'react-hot-toast';
 
 const AuthFlow = () => {
-  const [step, setStep] = useState('login'); // login, register, password, program
+  const [step, setStep] = useState('login'); // login, register_select, register, password, program
+  const [registrationType, setRegistrationType] = useState('general'); // general, supernatural, theology
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -67,7 +69,7 @@ const AuthFlow = () => {
       setMatricHint('Please select your Programme and Course of Selection first.');
       return;
     }
-    if (!programmeApplied) {
+    if (registrationType !== 'supernatural' && !programmeApplied) {
       setMatricHint('Please select your Programme first.');
       return;
     }
@@ -97,14 +99,14 @@ const AuthFlow = () => {
     e.preventDefault();
     setIsLoggingIn(true);
     setErrorMsg('');
-    
+
     const { error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: loginPassword,
     });
 
     if (error) {
-      setErrorMsg(error.message);
+      toast.error(error.message);
       setIsLoggingIn(false);
     }
     // On success, useEffect will redirect
@@ -113,10 +115,9 @@ const AuthFlow = () => {
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     if (regPassword !== regConfirmPassword) {
-      return setErrorMsg("Passwords do not match");
+      return toast.error("Passwords do not match");
     }
     setIsLoggingIn(true);
-    setErrorMsg('');
 
     const { data, error } = await supabase.auth.signUp({
       email: regEmail,
@@ -124,7 +125,7 @@ const AuthFlow = () => {
     });
 
     if (error) {
-      setErrorMsg(error.message);
+      toast.error(error.message);
       setIsLoggingIn(false);
     } else if (data?.user) {
       // Upload avatar if exists
@@ -161,13 +162,15 @@ const AuthFlow = () => {
         research_interest: researchInterest,
         sponsorship_details: sponsorshipDetails,
         course_of_selection: courseOfSelection,
-        avatar_url: uploadedAvatarUrl
+        avatar_url: uploadedAvatarUrl,
+        registration_type: registrationType
       });
 
       if (profileError) {
-        setErrorMsg(profileError.message);
+        toast.error(profileError.message);
         setIsLoggingIn(false);
       } else {
+        toast.success("Application submitted successfully!");
         setStep('program');
         setIsLoggingIn(false);
       }
@@ -178,10 +181,9 @@ const AuthFlow = () => {
   const handleProgramSubmit = async (e) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    setErrorMsg('');
     const { error } = await supabase.from('profiles').update({ program_type: regProgram }).eq('id', user.id);
     if (error) {
-      setErrorMsg(error.message);
+      toast.error(error.message);
       setIsLoggingIn(false);
     } else {
       window.location.href = '/student'; // Reload to fetch fresh profile
@@ -191,7 +193,7 @@ const AuthFlow = () => {
   return (
     <main className="login-wrapper">
       <div className="glass-panel login-card" style={{ maxWidth: step === 'register' ? '800px' : undefined, transition: 'max-width 0.3s ease' }}>
-        
+
         {step === 'login' && (
           <>
             <header className="login-header">
@@ -201,9 +203,9 @@ const AuthFlow = () => {
             <form className="login-form" onSubmit={handleLoginSubmit}>
               <div className="input-group">
                 <label>Email</label>
-                <input 
-                  type="email" 
-                  placeholder="Enter your email" 
+                <input
+                  type="email"
+                  placeholder="Enter your email"
                   disabled={isLoggingIn}
                   value={loginEmail}
                   onChange={e => setLoginEmail(e.target.value)}
@@ -212,21 +214,20 @@ const AuthFlow = () => {
               </div>
               <div className="input-group">
                 <label>Passphrase</label>
-                <input 
-                  type="password" 
-                  placeholder="••••••••••••" 
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
                   disabled={isLoggingIn}
                   value={loginPassword}
                   onChange={e => setLoginPassword(e.target.value)}
                   required
                 />
               </div>
-              
-              {errorMsg && <p style={{ color: '#ff4d4f', fontSize: '0.9rem', margin: '0' }}>{errorMsg}</p>}
+              <br />
 
-              <button 
-                type="submit" 
-                className="btn-premium primary login-btn" 
+              <button
+                type="submit"
+                className="btn-premium primary login-btn"
                 disabled={isLoggingIn}
                 style={{ opacity: isLoggingIn ? 0.7 : 1, cursor: isLoggingIn ? 'wait' : 'pointer' }}
               >
@@ -243,7 +244,45 @@ const AuthFlow = () => {
             <footer className="login-footer">
               <a href="#">Recover Access</a>
               <span className="divider">|</span>
-              <a href="#" onClick={(e) => { e.preventDefault(); setStep('register'); setErrorMsg(''); }}>Request Registration</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setStep('register_select'); }}>Request Registration</a>
+            </footer>
+          </>
+        )}
+
+        {step === 'register_select' && (
+          <>
+            <header className="login-header">
+              <h2>Select Application Form</h2>
+              <p>Please choose the appropriate registration form for your program.</p>
+            </header>
+            <div className="login-form">
+              <button
+                type="button"
+                className="btn-premium primary"
+                style={{ marginBottom: '1rem', width: '100%', padding: '1rem', fontSize: '1rem' }}
+                onClick={() => { setRegistrationType('general'); setStep('register'); }}
+              >
+                ZIBI Application Form 2026
+              </button>
+              <button
+                type="button"
+                className="btn-premium primary"
+                style={{ marginBottom: '1rem', width: '100%', padding: '1rem', fontSize: '1rem' }}
+                onClick={() => { setRegistrationType('supernatural'); setStep('register'); }}
+              >
+                SSN BASIC & ADVANCED (July/August 2026 Session)
+              </button>
+              <button
+                type="button"
+                className="btn-premium primary"
+                style={{ marginBottom: '1rem', width: '100%', padding: '1rem', fontSize: '1rem' }}
+                onClick={() => { setRegistrationType('theology'); setStep('register'); }}
+              >
+                ZIBI - Theology Course - 2026
+              </button>
+            </div>
+            <footer className="login-footer">
+              <a href="#" onClick={(e) => { e.preventDefault(); setStep('login'); }}>Return to Login</a>
             </footer>
           </>
         )}
@@ -251,11 +290,15 @@ const AuthFlow = () => {
         {step === 'register' && (
           <>
             <header className="login-header">
-              <h2>ZIBI Application Form</h2>
+              <h2>
+                {registrationType === 'general' && 'ZIBI Application Form'}
+                {registrationType === 'supernatural' && 'REGISTRATION FOR SSN BASIC & ADVANCED (JULY/AUGUST 2026 SESSION)'}
+                {registrationType === 'theology' && 'ZIBI - THEOLOGY COURSE - 2026'}
+              </h2>
               <p>Please complete your application for admission.</p>
             </header>
-            <form className="login-form" onSubmit={(e) => { e.preventDefault(); setStep('password'); setErrorMsg(''); }}>
-              
+            <form className="login-form" onSubmit={(e) => { e.preventDefault(); setStep('password'); }}>
+
               <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.5rem' }}>Personal Information</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1rem', alignItems: 'flex-start' }}>
                 <div className="input-group" style={{ marginBottom: 0 }}>
@@ -264,7 +307,7 @@ const AuthFlow = () => {
                 </div>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>Email *</label>
-                  <input type="email" placeholder="j.doe@example.com" required value={regEmail} onChange={e => setRegEmail(e.target.value)}/>
+                  <input type="email" placeholder="j.doe@example.com" required value={regEmail} onChange={e => setRegEmail(e.target.value)} />
                 </div>
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>Telephone *</label>
@@ -355,22 +398,33 @@ const AuthFlow = () => {
 
               <h3 style={{ color: 'var(--accent-gold)', margin: '2rem 0 1rem 0', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.5rem' }}>Spiritual & Program Details</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1rem', alignItems: 'flex-start' }}>
-                <div className="input-group" style={{ marginBottom: 0 }}>
-                  <label>What Programme are you applying for? *</label>
-                  <select required value={programmeApplied} onChange={e => setProgrammeApplied(e.target.value)}>
-                    <option value="">- Select Programme -</option>
-                    <option value="ZIBI STEP">ZIBI STEP</option>
-                    <option value="ZIBI REGULAR">ZIBI REGULAR</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
+                {registrationType !== 'supernatural' && (
+                  <div className="input-group" style={{ marginBottom: 0 }}>
+                    <label>What Programme are you applying for? *</label>
+                    <select required value={programmeApplied} onChange={e => setProgrammeApplied(e.target.value)}>
+                      <option value="">- Select Programme -</option>
+                      <option value="ZIBI STEP">ZIBI STEP</option>
+                      <option value="ZIBI REGULAR">ZIBI REGULAR</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                )}
                 <div className="input-group" style={{ marginBottom: 0 }}>
                   <label>Course of Selection *</label>
                   <select required value={courseOfSelection} onChange={e => setCourseOfSelection(e.target.value)}>
                     <option value="">- Select Course -</option>
                     <option value="ZIBI - Leadership Refresher Course">ZIBI - Leadership Refresher Course</option>
-                    <option value="School of Supernatural - School of Basic Studies">School of Supernatural - School of Basic Studies</option>
-                    <option value="School of Supernatural - School of Advanced Studies">School of Supernatural - School of Advanced Studies</option>
+                    {registrationType === 'supernatural' ? (
+                      <>
+                        <option value="School of Supernatural - Basic Studies">School of Supernatural - Basic Studies</option>
+                        <option value="School of Supernatural - Advanced Studies">School of Supernatural - Advanced Studies</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="School of Supernatural - School of Basic Studies">School of Supernatural - School of Basic Studies</option>
+                        <option value="School of Supernatural - School of Advanced Studies">School of Supernatural - School of Advanced Studies</option>
+                      </>
+                    )}
                     <option value="ZIBI - PGD in Theology">ZIBI - PGD in Theology</option>
                     <option value="ZIBI - Diploma in Theology">ZIBI - Diploma in Theology</option>
                     <option value="ZIBI - Certificate in Theology">ZIBI - Certificate in Theology</option>
@@ -436,13 +490,13 @@ const AuthFlow = () => {
                 <input type="checkbox" id="terms" required checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)} style={{ width: 'auto' }} />
                 <label htmlFor="terms" style={{ margin: 0, cursor: 'pointer' }}>I agree to terms and conditions *</label>
               </div>
-              
+
               <button type="submit" className="btn-premium primary login-btn">
                 Proceed to Setup Account
               </button>
             </form>
             <footer className="login-footer">
-              <a href="#" onClick={(e) => { e.preventDefault(); setStep('login'); setErrorMsg('');}}>Return to Login</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setStep('register_select'); }}>Back to Form Selection</a>
             </footer>
           </>
         )}
@@ -456,21 +510,19 @@ const AuthFlow = () => {
             <form className="login-form" onSubmit={handleRegisterSubmit}>
               <div className="input-group">
                 <label>New Passphrase</label>
-                <input type="password" placeholder="••••••••••••" required value={regPassword} onChange={e => setRegPassword(e.target.value)} disabled={isLoggingIn}/>
+                <input type="password" placeholder="••••••••••••" required value={regPassword} onChange={e => setRegPassword(e.target.value)} disabled={isLoggingIn} />
               </div>
               <div className="input-group">
                 <label>Confirm Passphrase</label>
-                <input type="password" placeholder="••••••••••••" required value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} disabled={isLoggingIn}/>
+                <input type="password" placeholder="••••••••••••" required value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} disabled={isLoggingIn} />
               </div>
-              
-              {errorMsg && <p style={{ color: '#ff4d4f', fontSize: '0.9rem', margin: '0' }}>{errorMsg}</p>}
-
+              <br />
               <button type="submit" className="btn-premium primary login-btn" disabled={isLoggingIn} style={{ opacity: isLoggingIn ? 0.7 : 1, cursor: isLoggingIn ? 'wait' : 'pointer' }}>
                 {isLoggingIn ? "Finalizing..." : "Finalize Registration"}
               </button>
             </form>
             <footer className="login-footer">
-              <a href="#" onClick={(e) => { e.preventDefault(); setStep('register'); setErrorMsg('');}}>Back to Details</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setStep('register'); }}>Back to Details</a>
             </footer>
           </>
         )}
@@ -478,23 +530,23 @@ const AuthFlow = () => {
         {step === 'program' && (
           <>
             <header className="login-header">
-               <h2>Program Selection</h2>
-               <p>Choose your designated academic structure.</p>
+              <h2>Program Selection</h2>
+              <p>Choose your designated academic structure.</p>
             </header>
             <form className="login-form" onSubmit={handleProgramSubmit}>
-               <div className="input-group">
-                 <label>Academic Program Type</label>
-                 <select value={regProgram} onChange={e => setRegProgram(e.target.value)} style={{ padding: '0.8rem', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', width: '100%', borderRadius: '4px' }} disabled={isLoggingIn}>
-                    <option value="multi-semester">Standard Multi-Semester Program</option>
-                    <option value="stretch">Continuous Stretch Program</option>
-                 </select>
-               </div>
-               
-               {errorMsg && <p style={{ color: '#ff4d4f', fontSize: '0.9rem', margin: '0' }}>{errorMsg}</p>}
+              <div className="input-group">
+                <label>Academic Program Type</label>
+                <select value={regProgram} onChange={e => setRegProgram(e.target.value)} style={{ padding: '0.8rem', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', width: '100%', borderRadius: '4px' }} disabled={isLoggingIn}>
+                  <option value="multi-semester">Standard Multi-Semester Program</option>
+                  <option value="stretch">Continuous Stretch Program</option>
+                </select>
+              </div>
 
-               <button type="submit" className="btn-premium primary login-btn" disabled={isLoggingIn} style={{ opacity: isLoggingIn ? 0.7 : 1, cursor: isLoggingIn ? 'wait' : 'pointer', marginTop: '1rem' }}>
-                 {isLoggingIn ? "Saving..." : "Complete Setup"}
-               </button>
+              {errorMsg && <p style={{ color: '#ff4d4f', fontSize: '0.9rem', margin: '0' }}>{errorMsg}</p>}
+
+              <button type="submit" className="btn-premium primary login-btn" disabled={isLoggingIn} style={{ opacity: isLoggingIn ? 0.7 : 1, cursor: isLoggingIn ? 'wait' : 'pointer', marginTop: '1rem' }}>
+                {isLoggingIn ? "Saving..." : "Complete Setup"}
+              </button>
             </form>
           </>
         )}

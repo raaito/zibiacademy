@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 const ExaminerFlow = () => {
   const { user, profile } = useAuth();
@@ -53,7 +54,7 @@ const ExaminerFlow = () => {
 
   const handleCreateAssessment = async (e) => {
     e.preventDefault();
-    if (!cohortId) return alert('Select an academic cycle');
+    if (!cohortId) return toast.error('Select an academic cycle');
     
     // Convert local datetime to UTC ISO string
     let parsedStartTime = new Date(startTime).toISOString();
@@ -69,8 +70,9 @@ const ExaminerFlow = () => {
       created_by: user.id
     }).select().single();
 
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     if (data) {
+      toast.success('Assessment created successfully');
       setAssessments([data, ...assessments]);
       setCourseName('');
       setCourseCode('');
@@ -78,8 +80,10 @@ const ExaminerFlow = () => {
   };
 
   const toggleAssessmentStatus = async (id, currentStatus) => {
-    await supabase.from('assessments').update({ is_open: !currentStatus }).eq('id', id);
+    const { error } = await supabase.from('assessments').update({ is_open: !currentStatus }).eq('id', id);
+    if (error) return toast.error(error.message);
     setAssessments(assessments.map(a => a.id === id ? { ...a, is_open: !currentStatus } : a));
+    toast.success(`Assessment is now ${!currentStatus ? 'Open' : 'Closed'}`);
   };
 
   const fetchQuestions = async (assessmentId) => {
@@ -110,7 +114,7 @@ const ExaminerFlow = () => {
 
   const handleAddQuestion = async (e) => {
     e.preventDefault();
-    if (!selectedAssessmentId) return alert('Select an assessment first');
+    if (!selectedAssessmentId) return toast.error('Select an assessment first');
 
     const newSeq = questions.length + 1;
     let payload = {
@@ -127,8 +131,9 @@ const ExaminerFlow = () => {
     }
 
     const { data, error } = await supabase.from('questions').insert(payload).select().single();
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     if (data) {
+      toast.success('Question added');
       setQuestions([...questions, data]);
       setQuestionText('');
     }

@@ -8,6 +8,7 @@ import StudentFlow from './components/StudentFlow'
 import AdminCandidatesFlow from './components/AdminCandidatesFlow'
 import ProtectedRoute from './components/ProtectedRoute'
 import { supabase, isSupabaseConfigured } from './supabaseClient'
+import { Toaster } from 'react-hot-toast'
 import './App.css'
 
 const Navigation = () => {
@@ -83,6 +84,26 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Toaster 
+          position="top-center"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: 'var(--bg-obsidian)',
+              color: 'var(--text-ivory)',
+              border: '1px solid var(--border-subtle)',
+              fontFamily: 'var(--font-body)',
+            },
+            success: {
+              iconTheme: { primary: '#00cc66', secondary: 'var(--bg-obsidian)' },
+              style: { border: '1px solid #00cc66' }
+            },
+            error: {
+              iconTheme: { primary: '#ff4d4f', secondary: 'var(--bg-obsidian)' },
+              style: { border: '1px solid #ff4d4f' }
+            }
+          }}
+        />
         <div className="elite-container">
           <Navigation />
           <Routes>

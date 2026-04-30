@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 const SuperAdminFlow = () => {
   const { profile } = useAuth();
@@ -41,8 +42,9 @@ const SuperAdminFlow = () => {
     if (!error && data) {
       setCohorts([data, ...cohorts]);
       setNewCohortName('');
+      toast.success("Academic Cycle Created Successfully!");
     } else if (error) {
-      alert("Error: " + error.message);
+      toast.error("Error: " + error.message);
     }
   };
 
