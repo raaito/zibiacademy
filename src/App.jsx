@@ -6,6 +6,7 @@ import SuperAdminFlow from './components/SuperAdminFlow'
 import ExaminerFlow from './components/ExaminerFlow'
 import StudentFlow from './components/StudentFlow'
 import AdminCandidatesFlow from './components/AdminCandidatesFlow'
+import RegisterFlow from './components/RegisterFlow'
 import ProtectedRoute from './components/ProtectedRoute'
 import { supabase, isSupabaseConfigured } from './supabaseClient'
 import { Toaster } from 'react-hot-toast'
@@ -23,8 +24,8 @@ const Navigation = () => {
   return (
     <nav className="elite-nav">
       <div className="logo-section">
-        <span className="logo-emblem">Æ</span>
-        <h1 className="logo-text">Global Institute</h1>
+        <img src="/logo.png" alt="zibi academy logo" className="logo-emblem" />
+        <h1 className="logo-text">zibi academy</h1>
       </div>
       <div className="nav-links">
         {user ? (
@@ -45,7 +46,7 @@ const Navigation = () => {
             <span style={{ color: '#aaa', marginRight: '1rem' }}>
               Welcome, {profile?.full_name || user.email} ({profile?.role})
             </span>
-            <span 
+            <span
               onClick={handleLogout}
               style={{ cursor: 'pointer', color: '#ff4d4f' }}
             >
@@ -53,9 +54,10 @@ const Navigation = () => {
             </span>
           </>
         ) : (
-          <span className="active-link" style={{ cursor: 'pointer' }}>
-            Portal Access
-          </span>
+          <>
+            <Link to="/" style={{ color: 'var(--text-ivory)', marginRight: '1.5rem', textDecoration: 'none' }} className="nav-item hover-gold">Login</Link>
+            <Link to="/register" style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 'bold' }} className="nav-item hover-gold">Register Now</Link>
+          </>
         )}
       </div>
     </nav>
@@ -70,7 +72,7 @@ function App() {
           <span style={{ fontSize: '3rem', color: '#ff4d4f' }}>⚠️</span>
           <h2 style={{ color: 'var(--text-ivory)', marginTop: '1rem', marginBottom: '1rem' }}>Missing Database Configuration</h2>
           <p style={{ color: 'var(--text-muted)' }}>
-            Your `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are not set. 
+            Your `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are not set.
             The system cannot render without an active database connection.
           </p>
           <p style={{ color: 'var(--accent-gold)', marginTop: '1rem', background: 'rgba(255, 215, 0, 0.1)', padding: '1rem', borderRadius: '4px' }}>
@@ -84,7 +86,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Toaster 
+        <Toaster
           position="top-center"
           toastOptions={{
             duration: 4000,
@@ -108,7 +110,8 @@ function App() {
           <Navigation />
           <Routes>
             <Route path="/" element={<AuthFlow />} />
-            
+            <Route path="/register" element={<RegisterFlow />} />
+
             <Route path="/admin/*" element={
               <ProtectedRoute allowedRoles={['superadmin']}>
                 <SuperAdminFlow />
@@ -126,13 +129,13 @@ function App() {
                 <StudentFlow />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/candidates/*" element={
               <ProtectedRoute allowedRoles={['superadmin']}>
                 <AdminCandidatesFlow />
               </ProtectedRoute>
             } />
-            
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

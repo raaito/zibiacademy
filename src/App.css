@@ -20,11 +20,9 @@
 }
 
 .logo-emblem {
-  font-family: var(--font-heading);
-  font-size: 2rem;
-  color: var(--accent-gold);
-  font-style: italic;
-  line-height: 1;
+  height: 40px;
+  width: auto;
+  object-fit: contain;
 }
 
 .logo-text {
