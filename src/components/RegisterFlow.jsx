@@ -175,16 +175,16 @@ const RegisterFlow = () => {
                 style={{ marginBottom: '1rem', width: '100%', padding: '1rem', fontSize: '1rem' }}
                 onClick={() => { setRegistrationType('supernatural'); setStep('register'); }}
               >
-                SSN BASIC & ADVANCED (July/August 2026 Session)
+                SSN BASIC & ADVANCED (June/August 2026 Session)
               </button>
-              <button
+              {/* <button
                 type="button"
                 className="btn-premium primary"
                 style={{ marginBottom: '1rem', width: '100%', padding: '1rem', fontSize: '1rem' }}
                 onClick={() => { setRegistrationType('theology'); setStep('register'); }}
               >
                 ZIBI - Theology Course - 2026
-              </button>
+              </button> */}
             </div>
             <footer className="login-footer">
               <button onClick={() => navigate('/')} className="btn-premium secondary" style={{ width: '100%' }}>Return to Login</button>
@@ -197,8 +197,8 @@ const RegisterFlow = () => {
             <header className="login-header">
               <h2>
                 {registrationType === 'general' && 'ZIBI Application Form'}
-                {registrationType === 'supernatural' && 'REGISTRATION FOR SSN BASIC & ADVANCED (JULY/AUGUST 2026 SESSION)'}
-                {registrationType === 'theology' && 'ZIBI - THEOLOGY COURSE - 2026'}
+                {registrationType === 'supernatural' && 'REGISTRATION FOR SSN BASIC & ADVANCED (JUNE/AUGUST 2026 SESSION)'}
+                /* {registrationType === 'theology' && 'ZIBI - THEOLOGY COURSE - 2026'} */
               </h2>
               <p>Please complete your application for admission.</p>
             </header>
