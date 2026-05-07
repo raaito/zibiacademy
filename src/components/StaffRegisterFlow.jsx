@@ -9,6 +9,7 @@ const StaffRegisterFlow = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState('examiner'); // default to examiner
+  const [staffCode, setStaffCode] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const navigate = useNavigate();
 
@@ -18,7 +19,18 @@ const StaffRegisterFlow = () => {
       return toast.error("Passphrases do not match");
     }
     setIsRegistering(true);
+    
+    // 1. Verify staff code via secure RPC (prevents code listing/scraping)
+    const { data: isValid, error: codeError } = await supabase
+      .rpc('verify_staff_code', { input_code: staffCode });
 
+    if (codeError || !isValid) {
+      toast.error("Unauthorized Access: Your credentials could not be verified by the system.");
+      setIsRegistering(false);
+      return;
+    }
+
+    // 2. Proceed with Auth Sign Up
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -28,21 +40,28 @@ const StaffRegisterFlow = () => {
       toast.error(error.message);
       setIsRegistering(false);
     } else if (data?.user) {
-      // Insert staff profile
+      // 3. Insert staff profile
       const { error: profileError } = await supabase.from('profiles').insert({
         id: data.user.id,
         email: email,
         full_name: fullName,
         role: role,
-        is_active: true, // Staff accounts are active by default
+        staff_code: staffCode,
+        is_active: true,
       });
 
+      // We sign out immediately regardless of profile success to prevent auto-login
+      await supabase.auth.signOut();
+
       if (profileError) {
-        toast.error(profileError.message);
+        toast.error(`Profile Creation Error: ${profileError.message}`);
         setIsRegistering(false);
       } else {
-        await supabase.auth.signOut(); // Prevent auto-login
+        // 4. Mark staff code as used (case-insensitive via secure RPC)
+        await supabase.rpc('redeem_staff_code', { input_code: staffCode });
+        
         toast.success(`Staff account created successfully for ${fullName}. Please log in.`);
+        setIsRegistering(false);
         navigate('/');
       }
     }
@@ -78,6 +97,18 @@ const StaffRegisterFlow = () => {
               required 
               value={email} 
               onChange={e => setEmail(e.target.value)} 
+              disabled={isRegistering}
+            />
+          </div>
+
+          <div className="input-group">
+            <label>Staff Code</label>
+            <input 
+              type="text" 
+              placeholder="ZA-STF-001" 
+              required 
+              value={staffCode} 
+              onChange={e => setStaffCode(e.target.value)} 
               disabled={isRegistering}
             />
           </div>

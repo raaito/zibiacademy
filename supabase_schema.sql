@@ -40,6 +40,7 @@ CREATE TABLE public.profiles (
     sponsorship_details TEXT,
     course_of_selection TEXT,
     registration_type TEXT,
+    staff_code TEXT UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -140,3 +141,44 @@ CREATE POLICY "Academic years viewable by everyone" ON public.academic_years FOR
 CREATE POLICY "Superadmins can insert academic years" ON public.academic_years FOR INSERT WITH CHECK ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'superadmin');
 CREATE POLICY "Superadmins can update academic years" ON public.academic_years FOR UPDATE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'superadmin');
 CREATE POLICY "Superadmins can delete academic years" ON public.academic_years FOR DELETE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'superadmin');
+
+-- 7. Valid Staff Codes (Whitelisting for registration)
+CREATE TABLE public.valid_staff_codes (
+    code TEXT PRIMARY KEY,
+    is_used BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.valid_staff_codes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Superadmins manage staff codes" ON public.valid_staff_codes FOR ALL USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'superadmin');
+
+-- Secure "Blind Verification" function (prevents unauthorized code listing)
+CREATE OR REPLACE FUNCTION verify_staff_code(input_code TEXT)
+RETURNS BOOLEAN 
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.valid_staff_codes 
+    WHERE LOWER(code) = LOWER(input_code) AND is_used = false
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Secure case-insensitive redemption function
+CREATE OR REPLACE FUNCTION redeem_staff_code(input_code TEXT)
+RETURNS VOID 
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.valid_staff_codes 
+  SET is_used = true 
+  WHERE LOWER(code) = LOWER(input_code);
+END;
+$$ LANGUAGE plpgsql;
+
+GRANT EXECUTE ON FUNCTION verify_staff_code(TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION redeem_staff_code(TEXT) TO anon, authenticated;
+

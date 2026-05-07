@@ -5,15 +5,17 @@ import { toast } from 'react-hot-toast';
 
 const SuperAdminFlow = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'cohorts'
+  const [activeTab, setActiveTab] = useState('users'); // 'users', 'cohorts', 'staff_codes'
   
   // Data states
   const [users, setUsers] = useState([]);
   const [cohorts, setCohorts] = useState([]);
+  const [staffCodes, setStaffCodes] = useState([]);
   const [loadingDb, setLoadingDb] = useState(true);
 
   // New cohort state
   const [newCohortName, setNewCohortName] = useState('');
+  const [newStaffCode, setNewStaffCode] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -21,13 +23,15 @@ const SuperAdminFlow = () => {
 
   const fetchData = async () => {
     setLoadingDb(true);
-    const [ {data: usersData}, {data: cohortsData} ] = await Promise.all([
+    const [ {data: usersData}, {data: cohortsData}, {data: codesData} ] = await Promise.all([
       supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase.from('academic_years').select('*').order('created_at', { ascending: false })
+      supabase.from('academic_years').select('*').order('created_at', { ascending: false }),
+      supabase.from('valid_staff_codes').select('*').order('created_at', { ascending: false })
     ]);
     
     if (usersData) setUsers(usersData);
     if (cohortsData) setCohorts(cohortsData);
+    if (codesData) setStaffCodes(codesData);
     setLoadingDb(false);
   };
 
@@ -99,6 +103,29 @@ const SuperAdminFlow = () => {
     }
   };
 
+  const handleCreateStaffCode = async (e) => {
+    e.preventDefault();
+    if (!newStaffCode.trim()) return;
+    const { data, error } = await supabase.from('valid_staff_codes').insert({
+      code: newStaffCode.trim().toUpperCase(),
+      is_used: false
+    }).select().single();
+
+    if (!error && data) {
+      setStaffCodes([data, ...staffCodes]);
+      setNewStaffCode('');
+      toast.success("Staff Verification Code Generated!");
+    } else if (error) {
+      toast.error("Error: " + error.message);
+    }
+  };
+
+  const deleteStaffCode = async (code) => {
+    setStaffCodes(staffCodes.filter(c => c.code !== code));
+    await supabase.from('valid_staff_codes').delete().eq('code', code);
+    toast.success("Code removed.");
+  };
+
   return (
     <main className="login-wrapper" style={{ alignItems: 'flex-start', paddingTop: '4rem' }}>
       <div className="glass-panel" style={{ maxWidth: '1000px', width: '100%', padding: '2rem' }}>
@@ -123,6 +150,13 @@ const SuperAdminFlow = () => {
             >
               Academic Cycles
             </button>
+            <button 
+              className={`btn-premium ${activeTab === 'staff_codes' ? 'primary' : 'secondary'}`}
+              onClick={() => setActiveTab('staff_codes')}
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              Staff Verification Codes
+            </button>
           </div>
         </header>
 
@@ -136,7 +170,7 @@ const SuperAdminFlow = () => {
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Name / Email</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Matriculation</th>
+                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Matric / Staff Code</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Role</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Cohort</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Semester</th>
@@ -152,7 +186,9 @@ const SuperAdminFlow = () => {
                           <span style={{ display: 'block', color: 'var(--text-ivory)' }}>{u.full_name}</span>
                           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</span>
                         </td>
-                        <td style={{ padding: '1rem' }}>{u.matriculation_number || 'N/A'}</td>
+                        <td style={{ padding: '1rem' }}>
+                          {u.role === 'candidate' ? (u.matriculation_number || 'N/A') : (u.staff_code || 'N/A')}
+                        </td>
                         <td style={{ padding: '1rem' }}>
                           <select 
                             value={u.role}
@@ -285,6 +321,67 @@ const SuperAdminFlow = () => {
                       ))}
                       {cohorts.length === 0 && (
                         <tr><td colSpan="3" style={{ textAlign: 'center', padding: '1rem' }}>No academic cycles found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'staff_codes' && (
+              <div>
+                <form onSubmit={handleCreateStaffCode} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Enter Unique Staff Code (e.g. ZA-ADMIN-2026)" 
+                    value={newStaffCode}
+                    onChange={(e) => setNewStaffCode(e.target.value)}
+                    style={{ flex: 1, padding: '0.75rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', borderRadius: '4px', outline: 'none' }}
+                  />
+                  <button type="submit" className="btn-premium primary">Authorize Code</button>
+                </form>
+
+                <div className="admin-table-container">
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Authorized Code</th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Created At</th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)', textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {staffCodes.map(c => (
+                        <tr key={c.code} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '1rem', color: 'var(--text-ivory)', fontFamily: 'monospace', letterSpacing: '1px' }}>{c.code}</td>
+                          <td style={{ padding: '1rem' }}>
+                            <span style={{ 
+                              padding: '0.2rem 0.5rem', 
+                              borderRadius: '12px', 
+                              fontSize: '0.8rem',
+                              background: c.is_used ? 'rgba(255, 77, 79, 0.1)' : 'rgba(0, 255, 136, 0.1)',
+                              color: c.is_used ? '#ff4d4f' : '#00ff88'
+                            }}>
+                              {c.is_used ? 'Used / Redeemed' : 'Valid / Pending'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {new Date(c.created_at).toLocaleDateString()}
+                          </td>
+                          <td style={{ padding: '1rem', textAlign: 'right' }}>
+                            <button 
+                              onClick={() => deleteStaffCode(c.code)}
+                              className="btn-premium"
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#ff4d4f', borderColor: 'rgba(255,77,79,0.3)' }}
+                            >
+                              Revoke
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {staffCodes.length === 0 && (
+                        <tr><td colSpan="4" style={{ textAlign: 'center', padding: '1rem' }}>No staff codes generated yet.</td></tr>
                       )}
                     </tbody>
                   </table>
