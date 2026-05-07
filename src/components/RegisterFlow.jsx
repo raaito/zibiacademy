@@ -10,7 +10,7 @@ const RegisterFlow = () => {
   const [step, setStep] = useState('register_select'); // register_select, register, password, program
   const [registrationType, setRegistrationType] = useState('general'); // general, supernatural, theology
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  
+
   // Register states
   const [regFullName, setRegFullName] = useState('');
   const [regMatriculation, setRegMatriculation] = useState('');
@@ -47,19 +47,24 @@ const RegisterFlow = () => {
     setMatricLoading(true);
     setMatricHint('');
     const year = new Date().getFullYear();
-    const prefixMap = { 'ZIBI STEP': 'ZS', 'ZIBI REGULAR': 'ZR', 'Other': 'ZBI' };
-    const prefix = prefixMap[programmeApplied] || 'ZBI';
+    const prefixMap = { 
+      'ZIBI STEP': 'ZS', 
+      'ZIBI REGULAR': 'ZR', 
+      'School of Supernatural - Basic Studies': 'SSB',
+      'School of Supernatural - Advanced Studies': 'SSA',
+      'Other': 'ZBI' 
+    };
+    const prefix = prefixMap[programmeApplied] || prefixMap[courseOfSelection] || 'ZBI';
     const { count } = await supabase
       .from('profiles')
       .select('id', { count: 'exact', head: true })
-      .eq('programme_applied', programmeApplied);
+      .or(`programme_applied.eq."${programmeApplied}",course_of_selection.eq."${courseOfSelection}"`);
     const serial = String((count || 0) + 1).padStart(3, '0');
     setRegMatriculation(`${prefix}-${year}-${serial}`);
     setMatricLoading(false);
   };
 
   const handleMatricClick = () => {
-    if (regMatriculation) return; 
     if (!programmeApplied && !courseOfSelection) {
       setMatricHint('Please select your Programme and Course of Selection first.');
       return;
@@ -74,6 +79,18 @@ const RegisterFlow = () => {
     }
     generateMatric();
   };
+
+  useEffect(() => {
+    setRegMatriculation('');
+  }, [programmeApplied, courseOfSelection]);
+
+  useEffect(() => {
+    if (programmeApplied === 'ZIBI STEP') {
+      setCourseOfSelection('ZIBI - Leadership Refresher Course');
+    } else if (programmeApplied === 'ZIBI REGULAR' && courseOfSelection === 'ZIBI - Leadership Refresher Course') {
+      setCourseOfSelection('');
+    }
+  }, [programmeApplied]);
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
@@ -108,7 +125,8 @@ const RegisterFlow = () => {
         full_name: regFullName,
         matriculation_number: regMatriculation,
         role: 'candidate',
-        program_type: null,
+        is_active: false,
+        program_type: (courseOfSelection.includes('PGD') || courseOfSelection.includes('Diploma') || courseOfSelection.includes('Certificate')) ? 'multi-semester' : 'stretch',
         programme_applied: programmeApplied,
         telephone: telephone,
         address: address,
@@ -131,29 +149,23 @@ const RegisterFlow = () => {
         toast.error(profileError.message);
         setIsLoggingIn(false);
       } else {
+        await supabase.auth.signOut(); // Ensure they are not auto-logged in
         toast.success("Application submitted successfully!");
-        setStep('program');
+        setStep('password_finish'); 
         setIsLoggingIn(false);
       }
     }
   };
 
-  const handleProgramSubmit = async (e) => {
+  const handleProgramSubmit = (e) => {
     e.preventDefault();
-    setIsLoggingIn(true);
-    const { error } = await supabase.from('profiles').update({ program_type: regProgram }).eq('id', user.id);
-    if (error) {
-      toast.error(error.message);
-      setIsLoggingIn(false);
-    } else {
-      window.location.href = '/student'; 
-    }
+    // This is now redundant but kept as a placeholder if needed
   };
 
   return (
     <main className="login-wrapper">
       <div className="glass-panel login-card" style={{ maxWidth: step === 'register' ? '800px' : undefined, transition: 'max-width 0.3s ease' }}>
-        
+
         {step === 'register_select' && (
           <>
             <header className="login-header">
@@ -165,7 +177,7 @@ const RegisterFlow = () => {
                 type="button"
                 className="btn-premium primary"
                 style={{ marginBottom: '1rem', width: '100%', padding: '1rem', fontSize: '1rem' }}
-                onClick={() => { setRegistrationType('general'); setStep('register'); }}
+                onClick={() => { setRegistrationType('general'); setStep('register'); setCourseOfSelection(''); setProgrammeApplied(''); }}
               >
                 ZIBI Application Form 2026
               </button>
@@ -173,7 +185,7 @@ const RegisterFlow = () => {
                 type="button"
                 className="btn-premium primary"
                 style={{ marginBottom: '1rem', width: '100%', padding: '1rem', fontSize: '1rem' }}
-                onClick={() => { setRegistrationType('supernatural'); setStep('register'); }}
+                onClick={() => { setRegistrationType('supernatural'); setStep('register'); setCourseOfSelection(''); setProgrammeApplied(''); }}
               >
                 SSN BASIC & ADVANCED (June/August 2026 Session)
               </button>
@@ -198,7 +210,7 @@ const RegisterFlow = () => {
               <h2>
                 {registrationType === 'general' && 'ZIBI Application Form'}
                 {registrationType === 'supernatural' && 'REGISTRATION FOR SSN BASIC & ADVANCED (JUNE/AUGUST 2026 SESSION)'}
-                /* {registrationType === 'theology' && 'ZIBI - THEOLOGY COURSE - 2026'} */
+                {/* {registrationType === 'theology' && 'ZIBI - THEOLOGY COURSE - 2026'}  */}
               </h2>
               <p>Please complete your application for admission.</p>
             </header>
@@ -310,29 +322,28 @@ const RegisterFlow = () => {
                       <option value="">- Select Programme -</option>
                       <option value="ZIBI STEP">ZIBI STEP</option>
                       <option value="ZIBI REGULAR">ZIBI REGULAR</option>
-                      <option value="Other">Other</option>
+                      {/* <option value="Other">Other</option> */}
                     </select>
                   </div>
                 )}
                 <div className="input-group" style={{ marginBottom: 0 }}>
-                  <label>Course of Selection *</label>
-                  <select required value={courseOfSelection} onChange={e => setCourseOfSelection(e.target.value)}>
+                  <label>Course of Selection * {programmeApplied === 'ZIBI STEP' && <span style={{ color: '#00cc66', fontSize: '0.75rem', fontWeight: 'normal' }}>(Auto-assigned for STEP)</span>}</label>
+                  <select required value={courseOfSelection} onChange={e => setCourseOfSelection(e.target.value)} disabled={programmeApplied === 'ZIBI STEP'}>
                     <option value="">- Select Course -</option>
-                    <option value="ZIBI - Leadership Refresher Course">ZIBI - Leadership Refresher Course</option>
-                    {registrationType === 'supernatural' ? (
+                    {registrationType === 'general' && (
+                      <>
+                        <option value="ZIBI - Leadership Refresher Course" disabled={programmeApplied === 'ZIBI REGULAR'}>ZIBI - Leadership Refresher Course {programmeApplied === 'ZIBI REGULAR' && '(STEP only)'}</option>
+                        <option value="ZIBI - PGD in Theology">ZIBI - PGD in Theology</option>
+                        <option value="ZIBI - Diploma in Theology">ZIBI - Diploma in Theology</option>
+                        <option value="ZIBI - Certificate in Theology">ZIBI - Certificate in Theology</option>
+                      </>
+                    )}
+                    {registrationType === 'supernatural' && (
                       <>
                         <option value="School of Supernatural - Basic Studies">School of Supernatural - Basic Studies</option>
                         <option value="School of Supernatural - Advanced Studies">School of Supernatural - Advanced Studies</option>
                       </>
-                    ) : (
-                      <>
-                        <option value="School of Supernatural - School of Basic Studies">School of Supernatural - School of Basic Studies</option>
-                        <option value="School of Supernatural - School of Advanced Studies">School of Supernatural - School of Advanced Studies</option>
-                      </>
                     )}
-                    <option value="ZIBI - PGD in Theology">ZIBI - PGD in Theology</option>
-                    <option value="ZIBI - Diploma in Theology">ZIBI - Diploma in Theology</option>
-                    <option value="ZIBI - Certificate in Theology">ZIBI - Certificate in Theology</option>
                   </select>
                 </div>
 
@@ -431,28 +442,22 @@ const RegisterFlow = () => {
           </>
         )}
 
-        {step === 'program' && (
+        {step === 'password_finish' && (
           <>
             <header className="login-header">
-              <h2>Program Selection</h2>
-              <p>Choose your designated academic structure.</p>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎉</div>
+              <h2>Registration Complete</h2>
+              <p>Your application has been received and is currently <strong>pending activation</strong>.</p>
             </header>
-            <form className="login-form" onSubmit={handleProgramSubmit}>
-              <div className="input-group">
-                <label>Academic Program Type</label>
-                <select value={regProgram} onChange={e => setRegProgram(e.target.value)} style={{ padding: '0.8rem', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', width: '100%', borderRadius: '4px' }} disabled={isLoggingIn}>
-                  <option value="multi-semester">Standard Multi-Semester Program</option>
-                  <option value="stretch">Continuous Stretch Program</option>
-                </select>
-              </div>
-
-              <button type="submit" className="btn-premium primary login-btn" disabled={isLoggingIn} style={{ opacity: isLoggingIn ? 0.7 : 1, cursor: isLoggingIn ? 'wait' : 'pointer', marginTop: '1rem' }}>
-                {isLoggingIn ? "Saving..." : "Complete Setup"}
-              </button>
-            </form>
+            <div className="glass-panel" style={{ padding: '1.5rem', background: 'rgba(0,204,102,0.05)', border: '1px solid #00cc66', marginBottom: '2rem', textAlign: 'center' }}>
+              <p style={{ color: 'var(--text-ivory)', marginBottom: '0.5rem' }}>Please contact the <strong>School Registrar</strong> to activate your account for portal access.</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Once activated, you can log in using your email and the passphrase you just created.</p>
+            </div>
+            <footer className="login-footer">
+              <button onClick={() => navigate('/')} className="btn-premium primary" style={{ width: '100%' }}>Return to Login</button>
+            </footer>
           </>
         )}
-
       </div>
     </main>
   );

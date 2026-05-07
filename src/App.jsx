@@ -7,6 +7,7 @@ import ExaminerFlow from './components/ExaminerFlow'
 import StudentFlow from './components/StudentFlow'
 import AdminCandidatesFlow from './components/AdminCandidatesFlow'
 import RegisterFlow from './components/RegisterFlow'
+import StaffRegisterFlow from './components/StaffRegisterFlow'
 import ProtectedRoute from './components/ProtectedRoute'
 import { supabase, isSupabaseConfigured } from './supabaseClient'
 import { Toaster } from 'react-hot-toast'
@@ -111,6 +112,7 @@ function App() {
           <Routes>
             <Route path="/" element={<AuthFlow />} />
             <Route path="/register" element={<RegisterFlow />} />
+            <Route path="/staff/register" element={<StaffRegisterFlow />} />
 
             <Route path="/admin/*" element={
               <ProtectedRoute allowedRoles={['superadmin']}>

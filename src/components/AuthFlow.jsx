@@ -22,7 +22,6 @@ const AuthFlow = () => {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
-  const [regProgram, setRegProgram] = useState('multi-semester');
 
   // Application Form States
   const [programmeApplied, setProgrammeApplied] = useState('');
@@ -45,26 +44,31 @@ const AuthFlow = () => {
   const [matricLoading, setMatricLoading] = useState(false);
   const [matricHint, setMatricHint] = useState('');
 
-  const { user, profile } = useAuth();
+  const { user, profile, loading, error: profileError } = useAuth();
   const navigate = useNavigate();
 
   const generateMatric = async () => {
     setMatricLoading(true);
     setMatricHint('');
     const year = new Date().getFullYear();
-    const prefixMap = { 'ZIBI STEP': 'ZS', 'ZIBI REGULAR': 'ZR', 'Other': 'ZBI' };
-    const prefix = prefixMap[programmeApplied] || 'ZBI';
+    const prefixMap = { 
+      'ZIBI STEP': 'ZS', 
+      'ZIBI REGULAR': 'ZR', 
+      'School of Supernatural - Basic Studies': 'SSB',
+      'School of Supernatural - Advanced Studies': 'SSA',
+      'Other': 'ZBI' 
+    };
+    const prefix = prefixMap[programmeApplied] || prefixMap[courseOfSelection] || 'ZBI';
     const { count } = await supabase
       .from('profiles')
       .select('id', { count: 'exact', head: true })
-      .eq('programme_applied', programmeApplied);
+      .or(`programme_applied.eq."${programmeApplied}",course_of_selection.eq."${courseOfSelection}"`);
     const serial = String((count || 0) + 1).padStart(3, '0');
     setRegMatriculation(`${prefix}-${year}-${serial}`);
     setMatricLoading(false);
   };
 
   const handleMatricClick = () => {
-    if (regMatriculation) return; // already generated, do nothing
     if (!programmeApplied && !courseOfSelection) {
       setMatricHint('Please select your Programme and Course of Selection first.');
       return;
@@ -80,9 +84,29 @@ const AuthFlow = () => {
     generateMatric();
   };
 
+  useEffect(() => {
+    setRegMatriculation('');
+  }, [programmeApplied, courseOfSelection]);
+
+  useEffect(() => {
+    if (programmeApplied === 'ZIBI STEP') {
+      setCourseOfSelection('ZIBI - Leadership Refresher Course');
+    } else if (programmeApplied === 'ZIBI REGULAR' && courseOfSelection === 'ZIBI - Leadership Refresher Course') {
+      setCourseOfSelection('');
+    }
+  }, [programmeApplied]);
+
   // Auto-redirect if already logged in
   useEffect(() => {
+    if (loading) return;
+
     if (user && profile) {
+      if (profile.role === 'candidate' && profile.is_active !== true) {
+        setErrorMsg("Account Inactive: Please contact the school registrar to activate your account.");
+        setIsLoggingIn(false);
+        supabase.auth.signOut();
+        return;
+      }
       if (profile.role === 'superadmin') navigate('/admin');
       else if (profile.role === 'examiner') navigate('/examiner');
       else if (profile.role === 'candidate') {
@@ -92,8 +116,15 @@ const AuthFlow = () => {
           navigate('/student');
         }
       }
+    } else if (user && !profile && !loading) {
+      setIsLoggingIn(false);
+      if (profileError) {
+        setErrorMsg(`Profile Error: ${profileError}`);
+      } else {
+        setErrorMsg("Your account profile could not be found. Please contact the registrar.");
+      }
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, loading, profileError, navigate]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -147,7 +178,8 @@ const AuthFlow = () => {
         full_name: regFullName,
         matriculation_number: regMatriculation,
         role: 'candidate',
-        program_type: null,
+        is_active: false,
+        program_type: (courseOfSelection.includes('PGD') || courseOfSelection.includes('Diploma') || courseOfSelection.includes('Certificate')) ? 'multi-semester' : 'stretch',
         programme_applied: programmeApplied,
         telephone: telephone,
         address: address,
@@ -170,8 +202,9 @@ const AuthFlow = () => {
         toast.error(profileError.message);
         setIsLoggingIn(false);
       } else {
+        await supabase.auth.signOut(); // Prevent auto-login
         toast.success("Application submitted successfully!");
-        setStep('program');
+        setStep('program'); // Or whatever the final step is in this component
         setIsLoggingIn(false);
       }
       // On success, useEffect will pick up the new user session but step will be 'program'
@@ -198,6 +231,11 @@ const AuthFlow = () => {
           <p>Authorized personnel and registered candidates only.</p>
         </header>
         <form className="login-form" onSubmit={handleLoginSubmit}>
+          {errorMsg && (
+            <div style={{ color: '#ff4d4f', background: 'rgba(255,77,79,0.1)', padding: '1rem', borderRadius: '4px', marginBottom: '1.5rem', fontSize: '0.9rem', border: '1px solid rgba(255,77,79,0.2)', textAlign: 'center', lineHeight: '1.4' }}>
+              <strong>⚠️ {errorMsg}</strong>
+            </div>
+          )}
           <div className="input-group">
             <label>Email</label>
             <input
@@ -239,7 +277,8 @@ const AuthFlow = () => {
           </button>
         </form>
         <footer className="login-footer">
-          <button onClick={() => navigate('/register')} className="btn-premium secondary" style={{ width: '100%' }}>Register New Account</button>
+          <button onClick={() => navigate('/register')} className="btn-premium secondary" style={{ width: '100%', marginBottom: '1rem' }}>Register New Account</button>
+          <button onClick={() => navigate('/staff/register')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}>Staff Registration</button>
         </footer>
       </div>
     </main>

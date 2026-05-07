@@ -198,7 +198,7 @@ const StudentFlow = () => {
                 <p style={{ color: 'var(--text-muted)' }}>Welcome, {profile?.full_name} ({profile?.matriculation_number})</p>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Program Type: <strong style={{ color: 'var(--text-ivory)' }}>{profile?.program_type === 'stretch' ? 'Continuous (Stretch)' : 'Multi-Semester'}</strong></span>
+                <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Academic Track: <strong style={{ color: 'var(--text-ivory)' }}>{profile?.program_type === 'stretch' ? 'Intensive (Stretch)' : 'Standard (Multi-Semester)'}</strong></span>
                 {profile?.program_type !== 'stretch' && (
                   <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Current Semester: <strong style={{ color: 'var(--text-ivory)' }}>{profile?.semester || 'First'}</strong></span>
                 )}

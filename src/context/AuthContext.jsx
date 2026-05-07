@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Fetch initial session
@@ -39,17 +40,25 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const fetchProfile = async (userId) => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
-        .single();
+        .eq('id', userId);
       
       if (error) {
         console.error("Error fetching profile:", error);
+        setError(error.message);
+      } else if (!data || data.length === 0) {
+        setError(`No profile found for UID: ${userId.substring(0, 8)}... Please verify your database records.`);
+      } else if (data.length > 1) {
+        console.warn("Multiple profiles found for user:", userId);
+        setProfile(data[0]); // Fallback to first one
+        setError(null);
       } else {
-        setProfile(data);
+        setProfile(data[0]);
+        setError(null);
       }
     } catch (err) {
       console.error("Unexpected error fetching profile:", err);
@@ -62,7 +71,8 @@ export const AuthProvider = ({ children }) => {
     session,
     user,
     profile,
-    loading
+    loading,
+    error
   };
 
   return (

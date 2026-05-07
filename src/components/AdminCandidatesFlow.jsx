@@ -192,6 +192,19 @@ const CandidateDirectory = () => {
                           <span>Matriculation: <strong style={{ color: '#aaa' }}>{c.matriculation_number || 'N/A'}</strong></span>
                           <span>Semester: <strong style={{ color: '#aaa' }}>{c.semester || 'First'}</strong></span>
                           <span>Email: {c.email}</span>
+                          <span style={{ marginTop: '0.5rem' }}>
+                            Status: <span style={{ 
+                              color: c.is_active ? '#00cc66' : '#ffaa33', 
+                              fontWeight: 'bold',
+                              fontSize: '0.75rem',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: c.is_active ? 'rgba(0,204,102,0.1)' : 'rgba(255,170,51,0.1)',
+                              border: `1px solid ${c.is_active ? '#00cc66' : '#ffaa33'}`
+                            }}>
+                              {c.is_active ? 'ACTIVE' : 'INACTIVE'}
+                            </span>
+                          </span>
                         </div>
                       </div>
                     </Link>
@@ -252,6 +265,29 @@ const CandidateDetail = () => {
     setLoading(false);
   };
 
+  const toggleActivation = async () => {
+    const newStatus = !candidate.is_active;
+    const { error } = await supabase.from('profiles').update({ is_active: newStatus }).eq('id', id);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setCandidate({ ...candidate, is_active: newStatus });
+      toast.success(`Account ${newStatus ? 'activated' : 'deactivated'} successfully.`);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!window.confirm("Are you sure you want to delete this candidate's account? This will remove their profile and all related data. This action cannot be undone.")) return;
+    
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Account deleted successfully.");
+      navigate('/candidates');
+    }
+  };
+
   if (loading) return <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '4rem' }}>Loading candidate data...</div>;
   if (!candidate) return <div style={{ color: '#ff4d4f', textAlign: 'center', padding: '4rem' }}>Candidate not found.</div>;
 
@@ -276,6 +312,39 @@ const CandidateDetail = () => {
           )}
         </div>
       </header>
+
+      <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.02)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Account Status:</span>
+          <span style={{ 
+            color: candidate.is_active ? '#00cc66' : '#ffaa33', 
+            fontWeight: 'bold',
+            padding: '4px 12px',
+            borderRadius: '20px',
+            fontSize: '0.8rem',
+            background: candidate.is_active ? 'rgba(0,204,102,0.1)' : 'rgba(255,170,51,0.1)',
+            border: `1px solid ${candidate.is_active ? '#00cc66' : '#ffaa33'}`
+          }}>
+            {candidate.is_active ? 'ACTIVE' : 'INACTIVE'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            onClick={toggleActivation} 
+            className={`btn-premium ${candidate.is_active ? 'secondary' : 'primary'}`}
+            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+          >
+            {candidate.is_active ? 'Deactivate Account' : 'Activate Account'}
+          </button>
+          <button 
+            onClick={deleteAccount} 
+            className="btn-premium"
+            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', color: '#ff4d4f', borderColor: '#ff4d4f' }}
+          >
+            Delete Account
+          </button>
+        </div>
+      </div>
 
       <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>Candidate Profile</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', background: 'var(--bg-surface-solid)', padding: '1.5rem', borderRadius: '4px', marginBottom: '3rem', border: '1px solid var(--border-subtle)' }}>

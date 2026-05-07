@@ -70,9 +70,33 @@ const SuperAdminFlow = () => {
     await supabase.from('profiles').update({ program_type: newProgramType }).eq('id', userId);
   };
 
+  const toggleUserStatus = async (userId, currentStatus) => {
+    const newStatus = !currentStatus;
+    setUsers(users.map(u => u.id === userId ? { ...u, is_active: newStatus } : u));
+    await supabase.from('profiles').update({ is_active: newStatus }).eq('id', userId);
+    toast.success(`User ${newStatus ? 'activated' : 'deactivated'} successfully.`);
+  };
+
   const handleToggleCohortState = async (cohortId, currentState) => {
     setCohorts(cohorts.map(c => c.id === cohortId ? { ...c, is_active: !currentState } : c));
     await supabase.from('academic_years').update({ is_active: !currentState }).eq('id', cohortId);
+  };
+
+  const deleteUser = async (userId) => {
+    if (userId === profile.id) {
+      toast.error("You cannot delete your own account.");
+      return;
+    }
+    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+
+    setUsers(users.filter(u => u.id !== userId));
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    if (error) {
+      toast.error(error.message);
+      fetchData();
+    } else {
+      toast.success("User deleted successfully.");
+    }
   };
 
   return (
@@ -116,7 +140,9 @@ const SuperAdminFlow = () => {
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Role</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Cohort</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Semester</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Program Type</th>
+                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Academic Track</th>
+                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
+                      <th style={{ padding: '1rem', color: 'var(--accent-gold)', textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -169,9 +195,35 @@ const SuperAdminFlow = () => {
                             style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
                             disabled={u.role !== 'candidate'}
                           >
-                            <option value="multi-semester">Multi-Semester</option>
-                            <option value="stretch">Stretch</option>
+                            <option value="multi-semester">Standard (Multi-Semester)</option>
+                            <option value="stretch">Intensive (Stretch)</option>
                           </select>
+                        </td>
+                        <td style={{ padding: '1rem' }}>
+                          <button 
+                            onClick={() => toggleUserStatus(u.id, u.is_active)}
+                            style={{ 
+                              background: 'transparent',
+                              border: `1px solid ${u.is_active ? '#00cc66' : '#ffaa33'}`,
+                              color: u.is_active ? '#00cc66' : '#ffaa33',
+                              padding: '0.3rem 0.6rem',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                              fontWeight: 'bold',
+                              width: '80px'
+                            }}
+                          >
+                            {u.is_active ? 'ACTIVE' : 'INACTIVE'}
+                          </button>
+                        </td>
+                        <td style={{ padding: '1rem', textAlign: 'right' }}>
+                          <button 
+                            onClick={() => deleteUser(u.id)}
+                            style={{ background: 'transparent', border: '1px solid rgba(255,77,79,0.3)', color: '#ff4d4f', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
+                          >
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}

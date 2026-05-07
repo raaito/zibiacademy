@@ -18,6 +18,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/" replace />;
   }
 
+  if (profile.role === 'candidate' && profile.is_active !== true) {
+    // Candidate but inactive, redirect to auth where AuthFlow will handle the message and logout
+    return <Navigate to="/" replace />;
+  }
+
   if (allowedRoles && !allowedRoles.includes(profile.role)) {
     // Logged in but wrong role, redirect to appropriate dashboard or auth
     if (profile.role === 'superadmin') return <Navigate to="/admin" replace />;
