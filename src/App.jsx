@@ -26,7 +26,7 @@ const Navigation = () => {
     <nav className="elite-nav">
       <div className="logo-section">
         <img src="/logo.png" alt="zibi academy logo" className="logo-emblem" />
-        <h1 className="logo-text">Directorate Academy of Manpower and Development</h1>
+        <h1 className="logo-text">Directorate of Training and Manpower Development Academy</h1>
       </div>
       <div className="nav-links">
         {user ? (
