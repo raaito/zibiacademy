@@ -27,8 +27,8 @@ const Navigation = () => {
   return (
     <nav className="elite-nav">
       <div className="logo-section">
-        <img src="/logo.png" alt="zibi academy logo" className="logo-emblem" />
-        <h1 className="logo-text">Directorate Academy of Manpower and Development</h1>
+        <img src="/logo.png" alt="dtmd academy logo" className="logo-emblem" />
+        <h1 className="logo-text">DTMD Academy</h1>
       </div>
 
       <button 
