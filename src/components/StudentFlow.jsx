@@ -188,7 +188,7 @@ const StudentFlow = () => {
 
   return (
     <main className="login-wrapper" style={{ alignItems: 'flex-start', paddingTop: '4rem' }}>
-      <div className="glass-panel" style={{ maxWidth: '1000px', width: '100%', padding: '2rem' }}>
+      <div className="glass-panel responsive-panel" style={{ maxWidth: '1000px', width: '100%' }}>
 
         {examState === 'dashboard' && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>

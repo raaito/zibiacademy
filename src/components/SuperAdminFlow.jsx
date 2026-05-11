@@ -128,7 +128,7 @@ const SuperAdminFlow = () => {
 
   return (
     <main className="login-wrapper" style={{ alignItems: 'flex-start', paddingTop: '4rem' }}>
-      <div className="glass-panel" style={{ maxWidth: '1000px', width: '100%', padding: '2rem' }}>
+      <div className="glass-panel responsive-panel" style={{ maxWidth: '1000px', width: '100%' }}>
         
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem' }}>
           <div>

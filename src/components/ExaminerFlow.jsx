@@ -148,7 +148,7 @@ const ExaminerFlow = () => {
 
   return (
     <main className="login-wrapper" style={{ alignItems: 'flex-start', paddingTop: '4rem' }}>
-      <div className="glass-panel" style={{ maxWidth: '1000px', width: '100%', padding: '2rem' }}>
+      <div className="glass-panel responsive-panel" style={{ maxWidth: '1000px', width: '100%' }}>
         <header style={{ marginBottom: '2rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1.5rem' }}>
           <h2 style={{ color: 'var(--text-ivory)', fontFamily: 'var(--font-heading)' }}>Examiner Portal</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Orchestrate assessments, questions, and evaluations.</p>
@@ -171,7 +171,7 @@ const ExaminerFlow = () => {
         {activeTab === 'assessments' && (
           <div>
             <h3 style={{ color: 'var(--text-ivory)', marginBottom: '1rem' }}>Create Assessment</h3>
-            <form onSubmit={handleCreateAssessment} style={{ display: 'grid', gap: '1rem', gridTemplateColumns: '1fr 1fr', marginBottom: '3rem' }}>
+            <form onSubmit={handleCreateAssessment} className="responsive-grid" style={{ marginBottom: '3rem' }}>
               <div className="input-group">
                 <label>Course Name</label>
                 <input type="text" value={courseName} onChange={e=>setCourseName(e.target.value)} required />
@@ -249,7 +249,7 @@ const ExaminerFlow = () => {
             </div>
 
             {selectedAssessmentId && (
-              <div style={{ display: 'grid', gap: '2rem', gridTemplateColumns: 'minmax(300px, 1fr) 2fr' }}>
+              <div className="responsive-split-grid">
                 <div style={{ background: 'var(--bg-surface-hover)', padding: '1.5rem', borderRadius: '4px' }}>
                   <h4 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>Add Question</h4>
                   <form onSubmit={handleAddQuestion} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
