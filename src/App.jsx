@@ -16,9 +16,11 @@ import './App.css'
 const Navigation = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setIsMenuOpen(false);
     navigate('/');
   };
 
@@ -28,36 +30,45 @@ const Navigation = () => {
         <img src="/logo.png" alt="zibi academy logo" className="logo-emblem" />
         <h1 className="logo-text">Directorate Academy of Manpower and Development</h1>
       </div>
-      <div className="nav-links">
+
+      <button 
+        className="mobile-menu-toggle" 
+        onClick={() => setIsMenuOpen(!isMenuOpen)}
+        aria-label="Toggle Navigation"
+      >
+        {isMenuOpen ? '✕' : '☰'}
+      </button>
+
+      <div className={`nav-links ${isMenuOpen ? 'active' : ''}`}>
         {user ? (
           <>
             {profile?.role === 'superadmin' && (
               <>
-                <Link to="/admin" style={{ color: 'var(--text-ivory)', marginRight: '1rem', textDecoration: 'none' }} className="nav-item hover-gold">Admin Console</Link>
-                <Link to="/examiner" style={{ color: 'var(--text-ivory)', marginRight: '1rem', textDecoration: 'none' }} className="nav-item hover-gold">Examiner Portal</Link>
-                <Link to="/candidates" style={{ color: 'var(--text-ivory)', marginRight: '1rem', textDecoration: 'none' }} className="nav-item hover-gold">Candidates View</Link>
+                <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Admin Console</Link>
+                <Link to="/examiner" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Examiner Portal</Link>
+                <Link to="/candidates" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Candidates View</Link>
               </>
             )}
             {profile?.role === 'examiner' && (
-              <Link to="/examiner" style={{ color: 'var(--text-ivory)', marginRight: '1rem', textDecoration: 'none' }} className="nav-item hover-gold">Examiner Portal</Link>
+              <Link to="/examiner" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Examiner Portal</Link>
             )}
             {profile?.role === 'candidate' && (
-              <Link to="/student" style={{ color: 'var(--text-ivory)', marginRight: '1rem', textDecoration: 'none' }} className="nav-item hover-gold">Candidate Portal</Link>
+              <Link to="/student" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Candidate Portal</Link>
             )}
-            <span style={{ color: '#aaa', marginRight: '1rem' }}>
-              Welcome, {profile?.full_name || user.email} ({profile?.role})
+            <span className="user-welcome">
+              Welcome, {profile?.full_name || user.email}
             </span>
             <span
               onClick={handleLogout}
-              style={{ cursor: 'pointer', color: '#ff4d4f' }}
+              className="sign-out-btn"
             >
               Sign Out
             </span>
           </>
         ) : (
           <>
-            <Link to="/" style={{ color: 'var(--text-ivory)', marginRight: '1.5rem', textDecoration: 'none' }} className="nav-item hover-gold">Login</Link>
-            <Link to="/register" style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 'bold' }} className="nav-item hover-gold">Register Now</Link>
+            <Link to="/" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Login</Link>
+            <Link to="/register" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold register-btn">Register Now</Link>
           </>
         )}
       </div>

@@ -35,11 +35,58 @@
 
 .nav-links {
   display: flex;
+  align-items: center;
   gap: 2rem;
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
+}
+
+.nav-item {
+  color: var(--text-ivory);
+  text-decoration: none;
+  transition: var(--transition-smooth);
+}
+
+.nav-item:hover {
+  color: var(--accent-gold);
+}
+
+.user-welcome {
+  color: #aaa;
+  font-size: 0.8rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.sign-out-btn {
+  cursor: pointer;
+  color: #ff4d4f;
+  font-weight: bold;
+  transition: var(--transition-smooth);
+}
+
+.sign-out-btn:hover {
+  color: #ff7875;
+  text-shadow: 0 0 10px rgba(255, 77, 79, 0.3);
+}
+
+.register-btn {
+  color: var(--accent-gold) !important;
+  font-weight: bold;
+}
+
+.mobile-menu-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--accent-gold);
+  font-size: 1.5rem;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  z-index: 1001;
 }
 
 .login-wrapper {
@@ -193,13 +240,51 @@
 }
 
 /* Responsive adjustments */
+@media (max-width: 1024px) {
+  .logo-text {
+    font-size: 0.9rem;
+  }
+}
+
 @media (max-width: 768px) {
   .elite-nav {
-    padding: 1.5rem 2rem;
+    padding: 1rem 1.5rem;
+    position: relative;
   }
+
+  .mobile-menu-toggle {
+    display: block;
+  }
+
   .nav-links {
-    display: none; /* Hide on mobile to keep clean styling */
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-obsidian);
+    border-bottom: 1px solid var(--border-subtle);
+    flex-direction: column;
+    padding: 2rem;
+    gap: 1.5rem;
+    align-items: flex-start;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   }
+
+  .nav-links.active {
+    display: flex;
+    animation: slideDown 0.3s ease-out forwards;
+  }
+
+  .user-welcome {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-subtle);
+    width: 100%;
+  }
+
   .login-card {
     padding: 1.5rem !important;
   }
@@ -207,7 +292,18 @@
     padding: 1rem !important;
   }
   .logo-text {
-    font-size: 1.1rem;
+    display: none; /* Hide long text on mobile, just keep logo */
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
