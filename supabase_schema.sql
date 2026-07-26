@@ -121,6 +121,10 @@ CREATE POLICY "Examiners can update assessments" ON public.assessments FOR UPDAT
   (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
 );
 
+CREATE POLICY "Examiners can delete assessments" ON public.assessments FOR DELETE USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+);
+
 -- Questions
 ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Questions viewable if assessment is open" ON public.questions FOR SELECT USING (
