@@ -132,6 +132,18 @@ CREATE POLICY "Questions viewable if assessment is open" ON public.questions FOR
   ))
 );
 
+CREATE POLICY "Examiners can insert questions" ON public.questions FOR INSERT WITH CHECK (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+);
+
+CREATE POLICY "Examiners can update questions" ON public.questions FOR UPDATE USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+);
+
+CREATE POLICY "Examiners can delete questions" ON public.questions FOR DELETE USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+);
+
 -- Candidate Scripts
 ALTER TABLE public.candidate_scripts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Candidates manage own scripts" ON public.candidate_scripts FOR INSERT WITH CHECK (auth.uid() = candidate_id);
