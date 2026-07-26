@@ -274,6 +274,7 @@ const CandidateDetail = () => {
   const [scripts, setScripts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cohortName, setCohortName] = useState('');
+  const [assessmentTotals, setAssessmentTotals] = useState({});
 
   useEffect(() => {
     fetchCandidateData();
@@ -282,7 +283,6 @@ const CandidateDetail = () => {
   const fetchCandidateData = async () => {
     setLoading(true);
     
-    // 1. Fetch Profile
     const { data: profileData } = await supabase.from('profiles').select('*, academic_years(name)').eq('id', id).single();
     if (!profileData) {
       setLoading(false);
@@ -292,16 +292,26 @@ const CandidateDetail = () => {
     setCohortName(profileData.academic_years?.name || 'Unassigned');
 
     if (profileData.cohort_id) {
-      // 2. Fetch all assessments for this cohort
       const { data: assessmentsData } = await supabase.from('assessments')
         .select('*')
         .eq('cohort_id', profileData.cohort_id)
         .order('semester', { ascending: true })
         .order('created_at', { ascending: false });
         
-      if (assessmentsData) setAssessments(assessmentsData);
+      if (assessmentsData) {
+        setAssessments(assessmentsData);
+        const ids = assessmentsData.map(a => a.id);
+        const { data: totals } = await supabase
+          .from('questions')
+          .select('assessment_id, points')
+          .in('assessment_id', ids);
+        if (totals) {
+          const map = {};
+          totals.forEach(q => { map[q.assessment_id] = (map[q.assessment_id] || 0) + q.points; });
+          setAssessmentTotals(map);
+        }
+      }
 
-      // 3. Fetch candidate's submitted scripts
       const { data: scriptsData } = await supabase.from('candidate_scripts')
         .select('*')
         .eq('candidate_id', id);
@@ -458,7 +468,7 @@ const CandidateDetail = () => {
                         <td style={{ padding: '1rem', textAlign: 'center' }}>{script ? script.auto_mcq_score : <span style={{ color: 'var(--border-focus)' }}>N/A</span>}</td>
                         <td style={{ padding: '1rem', textAlign: 'center' }}>{script ? (script.is_graded ? script.manual_theory_score : 'Pending') : <span style={{ color: 'var(--border-focus)' }}>N/A</span>}</td>
                         <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 'bold', color: script && script.is_graded ? '#00ff88' : 'var(--text-ivory)' }}>
-                          {script ? (script.is_graded ? (script.auto_mcq_score + script.manual_theory_score) : 'N/A') : <span style={{ color: 'var(--border-focus)' }}>N/A</span>}
+                          {script ? (script.is_graded ? `${script.auto_mcq_score + script.manual_theory_score} / ${assessmentTotals[assessment.id] || '?'}` : 'N/A') : <span style={{ color: 'var(--border-focus)' }}>N/A</span>}
                         </td>
                       </tr>
                     );

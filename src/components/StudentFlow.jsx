@@ -8,6 +8,7 @@ const StudentFlow = () => {
   const [examState, setExamState] = useState('dashboard'); // dashboard, taking_exam, finished
   const [assessments, setAssessments] = useState([]);
   const [takenScripts, setTakenScripts] = useState([]);
+  const [totalScoresMap, setTotalScoresMap] = useState({});
 
   // Active Exam States
   const [activeExam, setActiveExam] = useState(null);
@@ -32,6 +33,16 @@ const StudentFlow = () => {
 
     if (data) {
       setAssessments(data);
+      const ids = data.map(a => a.id);
+      const { data: totals } = await supabase
+        .from('questions')
+        .select('assessment_id, points')
+        .in('assessment_id', ids);
+      if (totals) {
+        const map = {};
+        totals.forEach(q => { map[q.assessment_id] = (map[q.assessment_id] || 0) + q.points; });
+        setTotalScoresMap(map);
+      }
       const { data: scripts } = await supabase.from('candidate_scripts').select('*').eq('candidate_id', user.id);
       if (scripts) setTakenScripts(scripts);
     }
@@ -240,6 +251,7 @@ const StudentFlow = () => {
                     <div>
                       {list.map(exam => {
                         const script = takenScripts.find(s => s.assessment_id === exam.id);
+                        const totalPossible = totalScoresMap[exam.id] || 0;
                         return (
                           <div key={exam.id} style={{ background: 'var(--bg-surface-solid)', padding: '1.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-focus)', display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ flex: 1, minWidth: '200px' }}>
@@ -254,7 +266,7 @@ const StudentFlow = () => {
                             <div style={{ flex: '1 1 auto', maxWidth: '300px', textAlign: 'right' }}>
                               {script ? (
                                 <div style={{ background: 'rgba(0, 255, 136, 0.1)', border: '1px solid #00ff88', color: '#00ff88', padding: '0.75rem', borderRadius: '4px', textAlign: 'center', fontWeight: 'bold' }}>
-                                  {script.is_graded ? `Total Score: ${script.auto_mcq_score + script.manual_theory_score}` : 'Pending Grading'}
+                                  {script.is_graded ? `Total Score: ${script.auto_mcq_score + script.manual_theory_score} / ${totalPossible}` : 'Pending Grading'}
                                 </div>
                               ) : exam.is_open ? (
                                 <button className="btn-premium primary" style={{ width: '100%' }} onClick={() => startExam(exam)}>Commence Exam</button>
