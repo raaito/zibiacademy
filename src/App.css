@@ -360,6 +360,14 @@
   min-width: 600px; /* Ensure table doesn't squish too much */
 }
 
+.responsive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 768px) {
   .admin-table-container {
     border-radius: 0;

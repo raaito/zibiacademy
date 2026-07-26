@@ -12,6 +12,9 @@ const SuperAdminFlow = () => {
   const [cohorts, setCohorts] = useState([]);
   const [staffCodes, setStaffCodes] = useState([]);
   const [loadingDb, setLoadingDb] = useState(true);
+  const [userPage, setUserPage] = useState(0);
+  const [userCount, setUserCount] = useState(0);
+  const PAGE_SIZE = 50;
 
   // New cohort state
   const [newCohortName, setNewCohortName] = useState('');
@@ -21,17 +24,36 @@ const SuperAdminFlow = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (!loadingDb) fetchUsersPage(userPage);
+  }, [userPage]);
+
+  const fetchUsersPage = async (page) => {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (data) setUsers(data);
+  };
+
   const fetchData = async () => {
     setLoadingDb(true);
-    const [ {data: usersData}, {data: cohortsData}, {data: codesData} ] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+    const { count } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true });
+    if (count !== null) setUserCount(count);
+
+    const [ {data: cohortsData}, {data: codesData} ] = await Promise.all([
       supabase.from('academic_years').select('*').order('created_at', { ascending: false }),
       supabase.from('valid_staff_codes').select('*').order('created_at', { ascending: false })
     ]);
     
-    if (usersData) setUsers(usersData);
     if (cohortsData) setCohorts(cohortsData);
     if (codesData) setStaffCodes(codesData);
+    await fetchUsersPage(0);
     setLoadingDb(false);
   };
 
@@ -130,30 +152,30 @@ const SuperAdminFlow = () => {
     <main className="login-wrapper" style={{ alignItems: 'flex-start', paddingTop: '4rem' }}>
       <div className="glass-panel responsive-panel" style={{ maxWidth: '1000px', width: '100%' }}>
         
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem' }}>
+        <header className="responsive-header" style={{ marginBottom: '2rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem' }}>
           <div>
             <h2 style={{ color: 'var(--text-ivory)', fontFamily: 'var(--font-heading)' }}>Super Admin Console</h2>
             <p style={{ color: 'var(--text-muted)' }}>Manage identities, roles, and academic cycles.</p>
           </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
+          <div className="responsive-tabs" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button 
               className={`btn-premium ${activeTab === 'users' ? 'primary' : 'secondary'}`}
               onClick={() => setActiveTab('users')}
-              style={{ padding: '0.5rem 1rem' }}
+              style={{ padding: '0.6rem 1rem', flex: '1 1 auto', minWidth: '120px' }}
             >
               Identity Matrix
             </button>
             <button 
               className={`btn-premium ${activeTab === 'cohorts' ? 'primary' : 'secondary'}`}
               onClick={() => setActiveTab('cohorts')}
-              style={{ padding: '0.5rem 1rem' }}
+              style={{ padding: '0.6rem 1rem', flex: '1 1 auto', minWidth: '120px' }}
             >
               Academic Cycles
             </button>
             <button 
               className={`btn-premium ${activeTab === 'staff_codes' ? 'primary' : 'secondary'}`}
               onClick={() => setActiveTab('staff_codes')}
-              style={{ padding: '0.5rem 1rem' }}
+              style={{ padding: '0.6rem 1rem', flex: '1 1 auto', minWidth: '120px' }}
             >
               Staff Verification Codes
             </button>
@@ -165,6 +187,27 @@ const SuperAdminFlow = () => {
         ) : (
           <>
             {activeTab === 'users' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    Showing {users.length} of {userCount} users
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <button
+                      className="btn-premium"
+                      disabled={userPage === 0}
+                      onClick={() => setUserPage(p => p - 1)}
+                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: userPage === 0 ? 0.5 : 1 }}
+                    >Previous</button>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Page {userPage + 1} of {Math.max(1, Math.ceil(userCount / PAGE_SIZE))}</span>
+                    <button
+                      className="btn-premium"
+                      disabled={(userPage + 1) * PAGE_SIZE >= userCount}
+                      onClick={() => setUserPage(p => p + 1)}
+                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: (userPage + 1) * PAGE_SIZE >= userCount ? 0.5 : 1 }}
+                    >Next</button>
+                  </div>
+                </div>
               <div className="admin-table-container" style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
                   <thead>
@@ -268,6 +311,7 @@ const SuperAdminFlow = () => {
                     )}
                   </tbody>
                 </table>
+              </div>
               </div>
             )}
 

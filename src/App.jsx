@@ -9,6 +9,7 @@ import AdminCandidatesFlow from './components/AdminCandidatesFlow'
 import RegisterFlow from './components/RegisterFlow'
 import StaffRegisterFlow from './components/StaffRegisterFlow'
 import ProtectedRoute from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
 import { supabase, isSupabaseConfigured } from './supabaseClient'
 import { Toaster } from 'react-hot-toast'
 import './App.css'
@@ -121,32 +122,40 @@ function App() {
         <div className="elite-container">
           <Navigation />
           <Routes>
-            <Route path="/" element={<AuthFlow />} />
-            <Route path="/register" element={<RegisterFlow />} />
-            <Route path="/staff/register" element={<StaffRegisterFlow />} />
+            <Route path="/" element={<ErrorBoundary><AuthFlow /></ErrorBoundary>} />
+            <Route path="/register" element={<ErrorBoundary><RegisterFlow /></ErrorBoundary>} />
+            <Route path="/staff/register" element={<ErrorBoundary><StaffRegisterFlow /></ErrorBoundary>} />
 
             <Route path="/admin/*" element={
-              <ProtectedRoute allowedRoles={['superadmin']}>
-                <SuperAdminFlow />
-              </ProtectedRoute>
+              <ErrorBoundary>
+                <ProtectedRoute allowedRoles={['superadmin']}>
+                  <SuperAdminFlow />
+                </ProtectedRoute>
+              </ErrorBoundary>
             } />
 
             <Route path="/examiner/*" element={
-              <ProtectedRoute allowedRoles={['examiner', 'superadmin']}>
-                <ExaminerFlow />
-              </ProtectedRoute>
+              <ErrorBoundary>
+                <ProtectedRoute allowedRoles={['examiner', 'superadmin']}>
+                  <ExaminerFlow />
+                </ProtectedRoute>
+              </ErrorBoundary>
             } />
 
             <Route path="/student/*" element={
-              <ProtectedRoute allowedRoles={['candidate']}>
-                <StudentFlow />
-              </ProtectedRoute>
+              <ErrorBoundary>
+                <ProtectedRoute allowedRoles={['candidate']}>
+                  <StudentFlow />
+                </ProtectedRoute>
+              </ErrorBoundary>
             } />
 
             <Route path="/candidates/*" element={
-              <ProtectedRoute allowedRoles={['superadmin']}>
-                <AdminCandidatesFlow />
-              </ProtectedRoute>
+              <ErrorBoundary>
+                <ProtectedRoute allowedRoles={['superadmin']}>
+                  <AdminCandidatesFlow />
+                </ProtectedRoute>
+              </ErrorBoundary>
             } />
 
             <Route path="*" element={<Navigate to="/" replace />} />

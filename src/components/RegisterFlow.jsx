@@ -55,10 +55,12 @@ const RegisterFlow = () => {
       'Other': 'ZBI' 
     };
     const prefix = prefixMap[programmeApplied] || prefixMap[courseOfSelection] || 'ZBI';
+    const safeProgramme = (programmeApplied || '').replace(/["']/g, '');
+    const safeCourse = (courseOfSelection || '').replace(/["']/g, '');
     const { count } = await supabase
       .from('profiles')
       .select('id', { count: 'exact', head: true })
-      .or(`programme_applied.eq."${programmeApplied}",course_of_selection.eq."${courseOfSelection}"`);
+      .or(`programme_applied.eq.${safeProgramme},course_of_selection.eq.${safeCourse}`);
     const serial = String((count || 0) + 1).padStart(3, '0');
     setRegMatriculation(`${prefix}-${year}-${serial}`);
     setMatricLoading(false);

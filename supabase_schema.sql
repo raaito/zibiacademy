@@ -15,12 +15,13 @@ CREATE TABLE public.academic_years (
 -- Role Enum: superadmin, examiner, candidate
 CREATE TYPE user_role AS ENUM ('superadmin', 'examiner', 'candidate');
 
-CREATE TABLE public.profiles (
+    CREATE TABLE public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
     matriculation_number TEXT UNIQUE, -- null for superadmins
     role user_role DEFAULT 'candidate',
+    is_active BOOLEAN DEFAULT false,
     cohort_id UUID REFERENCES public.academic_years(id), -- Only relevant for candidates
     semester TEXT DEFAULT 'First', -- 'First' or 'Second'
     program_type TEXT DEFAULT 'multi-semester', -- 'multi-semester' or 'stretch'
@@ -76,8 +77,8 @@ CREATE TABLE public.questions (
 -- 5. Candidate Scripts (Submissions)
 CREATE TABLE public.candidate_scripts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    candidate_id UUID REFERENCES public.profiles(id) NOT NULL,
-    assessment_id UUID REFERENCES public.assessments(id) NOT NULL,
+    candidate_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    assessment_id UUID REFERENCES public.assessments(id) ON DELETE CASCADE NOT NULL,
     answers JSONB NOT NULL, -- The payload of student answers
     auto_mcq_score INTEGER DEFAULT 0,
     manual_theory_score INTEGER DEFAULT 0,
@@ -89,8 +90,8 @@ CREATE TABLE public.candidate_scripts (
 -- 6. Infraction Logs (Anti-Cheat)
 CREATE TABLE public.infraction_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    candidate_id UUID REFERENCES public.profiles(id) NOT NULL,
-    assessment_id UUID REFERENCES public.assessments(id) NOT NULL,
+    candidate_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    assessment_id UUID REFERENCES public.assessments(id) ON DELETE CASCADE NOT NULL,
     infraction_type TEXT NOT NULL, -- e.g., 'blur', 'visibilitychange', 'copy'
     details TEXT,
     logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -110,6 +111,14 @@ ALTER TABLE public.assessments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Assessments viewable by target cohort or staff" ON public.assessments FOR SELECT USING (
   (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner') OR
   (cohort_id = (SELECT cohort_id FROM public.profiles WHERE id = auth.uid()))
+);
+
+CREATE POLICY "Examiners can insert assessments" ON public.assessments FOR INSERT WITH CHECK (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+);
+
+CREATE POLICY "Examiners can update assessments" ON public.assessments FOR UPDATE USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
 );
 
 -- Questions

@@ -8,6 +8,9 @@ const CandidateDirectory = () => {
   const [cohorts, setCohorts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [candidatePage, setCandidatePage] = useState(0);
+  const [candidateCount, setCandidateCount] = useState(0);
+  const PAGE_SIZE = 100;
   const [exportConfig, setExportConfig] = useState({
     personal: true,
     academic: true,
@@ -19,15 +22,34 @@ const CandidateDirectory = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (!loading) fetchCandidatesPage(candidatePage);
+  }, [candidatePage]);
+
+  const fetchCandidatesPage = async (page) => {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'candidate')
+      .order('full_name', { ascending: true })
+      .range(from, to);
+    if (data) setCandidates(data);
+  };
+
   const fetchData = async () => {
     setLoading(true);
-    const [ {data: usersData}, {data: cohortsData} ] = await Promise.all([
-      supabase.from('profiles').select('*').eq('role', 'candidate').order('full_name', { ascending: true }),
-      supabase.from('academic_years').select('*')
-    ]);
-    
-    if (usersData) setCandidates(usersData);
+    const { count } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'candidate');
+    if (count !== null) setCandidateCount(count);
+
+    const { data: cohortsData } = await supabase.from('academic_years').select('*');
     if (cohortsData) setCohorts(cohortsData);
+
+    await fetchCandidatesPage(0);
     setLoading(false);
   };
 
@@ -45,19 +67,26 @@ const CandidateDirectory = () => {
   }, {});
 
   const executeExportCSV = async () => {
-    if (candidates.length === 0) {
-      toast.error("No candidates to export.");
+    const toastId = toast.loading("Loading all candidate data for export...");
+
+    const { data: allCandidatesData } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'candidate')
+      .order('full_name', { ascending: true });
+
+    if (!allCandidatesData || allCandidatesData.length === 0) {
+      toast.error("No candidates to export.", { id: toastId });
       return;
     }
 
-    const toastId = toast.loading("Generating custom report...");
+    toast.loading("Generating custom report...", { id: toastId });
     setShowExportModal(false);
 
     try {
       let candidateScoresMap = {};
       let allCourseNames = new Set();
 
-      // If scores are requested, we must fetch scripts and assessments
       if (exportConfig.scores) {
         const [ { data: scripts }, { data: assessments } ] = await Promise.all([
           supabase.from('candidate_scripts').select('*'),
@@ -78,7 +107,6 @@ const CandidateDirectory = () => {
         }
       }
 
-      // Build Headers dynamically based on config
       let headers = [];
       if (exportConfig.personal) headers.push('Full Name', 'Email', 'Telephone', 'Address');
       if (exportConfig.academic) headers.push('Matriculation', 'Program Type', 'Semester', 'Cohort', 'Registration Form');
@@ -87,8 +115,7 @@ const CandidateDirectory = () => {
       const courseHeaders = Array.from(allCourseNames).map(name => `${name} (Score)`);
       if (exportConfig.scores) headers = headers.concat(courseHeaders);
 
-      // Build Rows dynamically
-      const rows = candidates.map(c => {
+      const rows = allCandidatesData.map(c => {
         let row = [];
         if (exportConfig.personal) row.push(`"${c.full_name || ''}"`, `"${c.email || ''}"`, `"${c.telephone || ''}"`, `"${c.address || ''}"`);
         if (exportConfig.academic) row.push(`"${c.matriculation_number || ''}"`, `"${c.program_type || ''}"`, `"${c.semester || ''}"`, `"${getCohortName(c.cohort_id)}"`, `"${c.registration_type || 'general'}"`);
@@ -173,6 +200,26 @@ const CandidateDirectory = () => {
         <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Loading directory...</div>
       ) : (
         <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              Showing {candidates.length} of {candidateCount} candidates
+            </span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                className="btn-premium"
+                disabled={candidatePage === 0}
+                onClick={() => setCandidatePage(p => p - 1)}
+                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: candidatePage === 0 ? 0.5 : 1 }}
+              >Previous</button>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Page {candidatePage + 1} of {Math.max(1, Math.ceil(candidateCount / PAGE_SIZE))}</span>
+              <button
+                className="btn-premium"
+                disabled={(candidatePage + 1) * PAGE_SIZE >= candidateCount}
+                onClick={() => setCandidatePage(p => p + 1)}
+                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: (candidatePage + 1) * PAGE_SIZE >= candidateCount ? 0.5 : 1 }}
+              >Next</button>
+            </div>
+          </div>
           {Object.keys(groupedCandidates).length === 0 ? (
             <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem', background: 'var(--bg-surface-solid)' }}>No candidates found.</div>
           ) : (
