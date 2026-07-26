@@ -55,6 +55,7 @@ CREATE TABLE public.assessments (
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
     is_open BOOLEAN DEFAULT false,
     semester TEXT DEFAULT 'First', -- 'First' or 'Second'
+    question_type TEXT DEFAULT 'mcq', -- 'mcq' or 'theory' - an exam is one type only
     instructions TEXT DEFAULT '', -- Exam instructions for candidates
     created_by UUID REFERENCES public.profiles(id), -- The Examiner
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -83,6 +84,7 @@ CREATE TABLE public.candidate_scripts (
     answers JSONB NOT NULL, -- The payload of student answers
     auto_mcq_score INTEGER DEFAULT 0,
     manual_theory_score INTEGER DEFAULT 0,
+    question_scores JSONB DEFAULT '{}'::jsonb, -- Per-question scores {question_id: score}
     is_graded BOOLEAN DEFAULT false,
     submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(candidate_id, assessment_id) -- A candidate can submit only once

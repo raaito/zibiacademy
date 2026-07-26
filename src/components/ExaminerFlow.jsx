@@ -17,6 +17,7 @@ const ExaminerFlow = () => {
   const [duration, setDuration] = useState(60);
   const [startTime, setStartTime] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [questionType, setQuestionType] = useState('mcq');
   const [editingAssessment, setEditingAssessment] = useState(null);
 
   const [selectedAssessmentId, setSelectedAssessmentId] = useState('');
@@ -59,6 +60,7 @@ const ExaminerFlow = () => {
     setDuration(60);
     setStartTime('');
     setInstructions('');
+    setQuestionType('mcq');
     setSemester('First');
     if (cohorts.length > 0) setCohortId(cohorts[0].id);
     setEditingAssessment(null);
@@ -78,7 +80,8 @@ const ExaminerFlow = () => {
         semester: semester,
         duration_minutes: duration,
         start_time: parsedStartTime,
-        instructions: instructions
+        instructions: instructions,
+        question_type: questionType
       }).eq('id', editingAssessment.id);
 
       if (error) return toast.error(error.message);
@@ -91,7 +94,8 @@ const ExaminerFlow = () => {
         semester: semester,
         duration_minutes: duration,
         start_time: parsedStartTime,
-        instructions: instructions
+        instructions: instructions,
+        question_type: questionType
       } : a));
       resetAssessmentForm();
     } else {
@@ -103,6 +107,7 @@ const ExaminerFlow = () => {
         duration_minutes: duration,
         start_time: parsedStartTime,
         instructions: instructions,
+        question_type: questionType,
         is_open: false,
         created_by: user.id
       }).select().single();
@@ -123,6 +128,7 @@ const ExaminerFlow = () => {
     setDuration(assessment.duration_minutes);
     setStartTime(new Date(assessment.start_time).toISOString().slice(0, 16));
     setInstructions(assessment.instructions || '');
+    setQuestionType(assessment.question_type || 'mcq');
   };
 
   const deleteAssessment = async (id) => {
@@ -194,14 +200,17 @@ const ExaminerFlow = () => {
     e.preventDefault();
     if (!selectedAssessmentId) return toast.error('Select an assessment first');
 
+    const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
+    const effectiveQType = selectedAssessment?.question_type || 'mcq';
+
     if (editingQuestion) {
       let payload = {
-        q_type: qType,
+        q_type: editingQuestion.q_type,
         question_text: questionText,
         points: Number(points),
       };
 
-      if (qType === 'mcq') {
+      if (editingQuestion.q_type === 'mcq') {
         payload.options = options.split(',').map(o => o.trim());
         payload.correct_answer = correctAnswer.trim();
       } else {
@@ -218,13 +227,13 @@ const ExaminerFlow = () => {
       const newSeq = questions.length + 1;
       let payload = {
         assessment_id: selectedAssessmentId,
-        q_type: qType,
+        q_type: effectiveQType,
         question_text: questionText,
         points: Number(points),
         sequence_number: newSeq
       };
 
-      if (qType === 'mcq') {
+      if (effectiveQType === 'mcq') {
         payload.options = options.split(',').map(o => o.trim());
         payload.correct_answer = correctAnswer.trim();
       }
@@ -263,6 +272,17 @@ const ExaminerFlow = () => {
   const saveTheoryGrade = async (scriptId, newScore) => {
     await supabase.from('candidate_scripts').update({ manual_theory_score: Number(newScore), is_graded: true }).eq('id', scriptId);
     setScripts(scripts.map(s => s.id === scriptId ? { ...s, manual_theory_score: Number(newScore), is_graded: true } : s));
+  };
+
+  const saveQuestionScores = async (scriptId, questionScores) => {
+    const theoryTotal = Object.values(questionScores).reduce((sum, s) => sum + Number(s), 0);
+    await supabase.from('candidate_scripts').update({
+      question_scores: questionScores,
+      manual_theory_score: theoryTotal,
+      is_graded: true
+    }).eq('id', scriptId);
+    setScripts(scripts.map(s => s.id === scriptId ? { ...s, question_scores: questionScores, manual_theory_score: theoryTotal, is_graded: true } : s));
+    toast.success('Scores saved');
   };
 
   return (
@@ -311,6 +331,13 @@ const ExaminerFlow = () => {
                 <select value={semester} onChange={e=>setSemester(e.target.value)} style={{ padding: '0.8rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', width: '100%' }}>
                   <option value="First">First</option>
                   <option value="Second">Second</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Question Type</label>
+                <select value={questionType} onChange={e=>setQuestionType(e.target.value)} style={{ padding: '0.8rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', width: '100%' }}>
+                  <option value="mcq">Multiple Choice (MCQ)</option>
+                  <option value="theory">Theory / Essay</option>
                 </select>
               </div>
               <div className="input-group">
@@ -397,10 +424,16 @@ const ExaminerFlow = () => {
                     {editingQuestion ? 'Edit Question' : 'Add Question'}
                   </h4>
                   <form onSubmit={handleAddQuestion} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <select value={qType} onChange={e=>setQType(e.target.value)} style={{ padding: '0.5rem', background: 'var(--bg-surface-solid)', color: 'var(--text-ivory)' }}>
-                      <option value="mcq">Multiple Choice</option>
-                      <option value="theory">Theory / Essay</option>
-                    </select>
+                    {(() => {
+                      const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
+                      const lockedType = selectedAssessment?.question_type;
+                      return (
+                        <div style={{ padding: '0.5rem', background: 'var(--bg-surface-solid)', color: 'var(--text-ivory)', borderRadius: '4px', fontSize: '0.9rem', textAlign: 'center', border: '1px solid var(--border-focus)' }}>
+                          Question Type: <strong style={{ color: 'var(--accent-gold)' }}>{lockedType === 'mcq' ? 'Multiple Choice' : 'Theory / Essay'}</strong>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>(set by assessment)</span>
+                        </div>
+                      );
+                    })()}
                     
                     <textarea placeholder="Question Text" required value={questionText} onChange={e=>setQuestionText(e.target.value)} rows={4} style={{ background: 'var(--bg-surface-solid)', padding: '0.5rem', color: 'var(--text-ivory)', outline: 'none', border: '1px solid var(--border-subtle)' }}></textarea>
                     
@@ -508,6 +541,7 @@ const ExaminerFlow = () => {
                     const answer = activeScript.answers[q.id];
                     const isMcq = q.q_type === 'mcq';
                     const isCorrect = isMcq && answer === q.correct_answer;
+                    const currentScore = activeScript.question_scores?.[q.id];
                     return (
                       <div key={q.id} style={{ background: 'var(--bg-obsidian)', padding: '1rem', marginBottom: '1rem', borderLeft: '3px solid var(--accent-gold)', borderRadius: '4px' }}>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
@@ -527,7 +561,24 @@ const ExaminerFlow = () => {
                             <div style={{ color: 'var(--text-ivory)', whiteSpace: 'pre-wrap' }}>{answer}</div>
                             {isMcq && (
                               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: isCorrect ? '#00cc66' : '#ffaa33' }}>
-                                {isCorrect ? '✓ Correct' : `✗ Incorrect (Correct answer: ${q.correct_answer})`}
+                                {isCorrect ? '✓ Correct (+{q.points} pts)' : `✗ Incorrect (Correct answer: ${q.correct_answer})`}
+                              </div>
+                            )}
+                            {!isMcq && (
+                              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Score (out of {q.points}):</label>
+                                <input
+                                  type="number"
+                                  defaultValue={currentScore !== undefined ? currentScore : ''}
+                                  min={0}
+                                  max={q.points}
+                                  onChange={(e) => {
+                                    if (!activeScript.draftScores) activeScript.draftScores = {};
+                                    activeScript.draftScores[q.id] = e.target.value;
+                                  }}
+                                  style={{ background: 'var(--bg-obsidian)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', padding: '0.3rem', fontSize: '1rem', width: '70px', textAlign: 'center' }}
+                                  placeholder="--"
+                                />
                               </div>
                             )}
                           </div>
@@ -547,26 +598,24 @@ const ExaminerFlow = () => {
                   )}
                 </div>
 
-                <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '2rem', display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '2rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Auto MCQ Score</label>
                     <div style={{ fontSize: '1.5rem', color: 'var(--text-ivory)' }}>{activeScript.auto_mcq_score} Pts</div>
                   </div>
                   <div>
-                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Manual Theory Score</label>
-                    <input
-                      type="number"
-                      defaultValue={activeScript.manual_theory_score}
-                      onChange={(e) => activeScript.draft_score = e.target.value}
-                      style={{ background: 'var(--bg-obsidian)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', padding: '0.5rem', fontSize: '1.2rem', width: '100px', textAlign: 'center' }}
-                    />
+                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Theory Total</label>
+                    <div style={{ fontSize: '1.5rem', color: 'var(--accent-gold)' }}>{activeScript.manual_theory_score} Pts</div>
                   </div>
                   <div style={{ marginLeft: 'auto' }}>
                     <button
-                      onClick={() => saveTheoryGrade(activeScript.id, activeScript.draft_score || activeScript.manual_theory_score)}
+                      onClick={() => {
+                        if (!activeScript.draftScores && !window.confirm('No per-question scores entered. Save anyway?')) return;
+                        saveQuestionScores(activeScript.id, activeScript.draftScores || {});
+                      }}
                       className="btn-premium primary"
                     >
-                      Save Grade
+                      Save All Scores
                     </button>
                   </div>
                 </div>

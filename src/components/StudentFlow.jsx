@@ -171,11 +171,14 @@ const StudentFlow = () => {
   const submitExam = async () => {
     if (!activeExam || !user) return;
 
-    // Calculate auto MCQ score
     let mcqScore = 0;
+    const questionScores = {};
     questions.forEach(q => {
-      if (q.q_type === 'mcq' && answers[q.id] === q.correct_answer) {
-        mcqScore += q.points;
+      if (q.q_type === 'mcq') {
+        const isCorrect = answers[q.id] === q.correct_answer;
+        const pts = isCorrect ? q.points : 0;
+        questionScores[q.id] = pts;
+        mcqScore += pts;
       }
     });
 
@@ -184,6 +187,7 @@ const StudentFlow = () => {
       assessment_id: activeExam.id,
       answers: answers,
       auto_mcq_score: mcqScore,
+      question_scores: questionScores,
       is_graded: false
     });
 
