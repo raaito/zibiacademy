@@ -16,6 +16,7 @@ const ExaminerFlow = () => {
   const [semester, setSemester] = useState('First');
   const [duration, setDuration] = useState(60);
   const [startTime, setStartTime] = useState('');
+  const [instructions, setInstructions] = useState('');
   const [editingAssessment, setEditingAssessment] = useState(null);
 
   const [selectedAssessmentId, setSelectedAssessmentId] = useState('');
@@ -29,6 +30,8 @@ const ExaminerFlow = () => {
 
   const [scripts, setScripts] = useState([]);
   const [activeScript, setActiveScript] = useState(null);
+  const [gradingQuestions, setGradingQuestions] = useState([]);
+  const [gradingQuestionsLoading, setGradingQuestionsLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -55,6 +58,7 @@ const ExaminerFlow = () => {
     setCourseCode('');
     setDuration(60);
     setStartTime('');
+    setInstructions('');
     setSemester('First');
     if (cohorts.length > 0) setCohortId(cohorts[0].id);
     setEditingAssessment(null);
@@ -73,7 +77,8 @@ const ExaminerFlow = () => {
         cohort_id: cohortId,
         semester: semester,
         duration_minutes: duration,
-        start_time: parsedStartTime
+        start_time: parsedStartTime,
+        instructions: instructions
       }).eq('id', editingAssessment.id);
 
       if (error) return toast.error(error.message);
@@ -85,7 +90,8 @@ const ExaminerFlow = () => {
         cohort_id: cohortId,
         semester: semester,
         duration_minutes: duration,
-        start_time: parsedStartTime
+        start_time: parsedStartTime,
+        instructions: instructions
       } : a));
       resetAssessmentForm();
     } else {
@@ -96,6 +102,7 @@ const ExaminerFlow = () => {
         semester: semester,
         duration_minutes: duration,
         start_time: parsedStartTime,
+        instructions: instructions,
         is_open: false,
         created_by: user.id
       }).select().single();
@@ -115,6 +122,7 @@ const ExaminerFlow = () => {
     setSemester(assessment.semester);
     setDuration(assessment.duration_minutes);
     setStartTime(new Date(assessment.start_time).toISOString().slice(0, 16));
+    setInstructions(assessment.instructions || '');
   };
 
   const deleteAssessment = async (id) => {
@@ -123,6 +131,17 @@ const ExaminerFlow = () => {
     if (error) return toast.error(error.message);
     setAssessments(assessments.filter(a => a.id !== id));
     toast.success('Assessment deleted');
+  };
+
+  const fetchGradingQuestions = async (assessmentId) => {
+    if (!assessmentId) return;
+    setGradingQuestionsLoading(true);
+    const { data } = await supabase.from('questions')
+      .select('*')
+      .eq('assessment_id', assessmentId)
+      .order('sequence_number', { ascending: true });
+    if (data) setGradingQuestions(data);
+    setGradingQuestionsLoading(false);
   };
 
   const toggleAssessmentStatus = async (id, currentStatus) => {
@@ -151,12 +170,14 @@ const ExaminerFlow = () => {
     setSelectedAssessmentId(aid);
     setActiveScript(null);
     if (aid) {
-      const { data } = await supabase.from('candidate_scripts')
+      const { data: scriptsData } = await supabase.from('candidate_scripts')
         .select('*, profiles(full_name, matriculation_number)')
         .eq('assessment_id', aid);
-      if (data) setScripts(data);
+      if (scriptsData) setScripts(scriptsData);
+      fetchGradingQuestions(aid);
     } else {
       setScripts([]);
+      setGradingQuestions([]);
     }
   };
 
@@ -299,6 +320,16 @@ const ExaminerFlow = () => {
               <div className="input-group">
                 <label>Start Time</label>
                 <input type="datetime-local" value={startTime} onChange={e=>setStartTime(e.target.value)} required />
+              </div>
+              <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+                <label>Instructions for Candidates</label>
+                <textarea
+                  value={instructions}
+                  onChange={e=>setInstructions(e.target.value)}
+                  rows={4}
+                  placeholder="e.g. Answer all questions. Each theory question must be at least 200 words. No electronic devices allowed."
+                  style={{ width: '100%', background: 'var(--bg-surface-solid)', padding: '0.5rem', color: 'var(--text-ivory)', outline: 'none', border: '1px solid var(--border-subtle)', fontFamily: 'var(--font-body)', resize: 'vertical' }}
+                />
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem' }}>
                 <button type="submit" className="btn-premium primary" style={{ flex: 1 }}>
@@ -454,7 +485,7 @@ const ExaminerFlow = () => {
                         <td style={{ padding: '1rem' }}>{s.auto_mcq_score}</td>
                         <td style={{ padding: '1rem' }}>{s.manual_theory_score}</td>
                         <td style={{ padding: '1rem' }}>
-                          <button onClick={() => setActiveScript(s)} className="btn-premium" style={{ padding: '0.4rem 0.8rem' }}>Review Script</button>
+                          <button onClick={() => { setActiveScript(s); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.8rem' }}>Review Script</button>
                         </td>
                       </tr>
                     ))}
@@ -472,10 +503,48 @@ const ExaminerFlow = () => {
                 </div>
                 
                 <div style={{ marginBottom: '2rem' }}>
-                  <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Candidate Answers Payload</h4>
-                  <pre style={{ background: 'var(--bg-obsidian)', padding: '1rem', color: 'var(--text-ivory)', overflowX: 'auto' }}>
-                    {JSON.stringify(activeScript.answers, null, 2)}
-                  </pre>
+                  <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Candidate Answers</h4>
+                  {gradingQuestions.map((q, idx) => {
+                    const answer = activeScript.answers[q.id];
+                    const isMcq = q.q_type === 'mcq';
+                    const isCorrect = isMcq && answer === q.correct_answer;
+                    return (
+                      <div key={q.id} style={{ background: 'var(--bg-obsidian)', padding: '1rem', marginBottom: '1rem', borderLeft: '3px solid var(--accent-gold)', borderRadius: '4px' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                          Q{idx + 1}. {q.q_type.toUpperCase()} ({q.points} Pts)
+                        </div>
+                        <div style={{ color: 'var(--text-ivory)', marginBottom: '0.75rem', lineHeight: '1.5' }}>
+                          {q.question_text}
+                        </div>
+                        {answer !== undefined && answer !== '' ? (
+                          <div style={{
+                            background: isMcq ? (isCorrect ? 'rgba(0,255,136,0.08)' : 'rgba(255,77,79,0.08)') : 'rgba(255,255,255,0.03)',
+                            padding: '0.75rem',
+                            borderRadius: '4px',
+                            border: `1px solid ${isMcq ? (isCorrect ? '#00cc66' : '#ff4d4f') : 'var(--border-subtle)'}`
+                          }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Candidate's Answer:</div>
+                            <div style={{ color: 'var(--text-ivory)', whiteSpace: 'pre-wrap' }}>{answer}</div>
+                            {isMcq && (
+                              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: isCorrect ? '#00cc66' : '#ffaa33' }}>
+                                {isCorrect ? '✓ Correct' : `✗ Incorrect (Correct answer: ${q.correct_answer})`}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ color: '#ff4d4f', fontStyle: 'italic' }}>No answer provided</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {gradingQuestionsLoading && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Loading questions...</div>
+                  )}
+                  {!gradingQuestionsLoading && gradingQuestions.length === 0 && (
+                    <pre style={{ background: 'var(--bg-obsidian)', padding: '1rem', color: 'var(--text-ivory)', overflowX: 'auto' }}>
+                      {JSON.stringify(activeScript.answers, null, 2)}
+                    </pre>
+                  )}
                 </div>
 
                 <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '2rem', display: 'flex', alignItems: 'center', gap: '2rem' }}>

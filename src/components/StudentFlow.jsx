@@ -37,9 +37,15 @@ const StudentFlow = () => {
     }
   };
 
+  const saveDraft = () => {
+    if (!activeExam || examState !== 'taking_exam') return;
+    const draftKey = `zibi_exam_draft_${activeExam.id}`;
+    const draftData = { answers, timeLeft, savedAt: Date.now() };
+    localStorage.setItem(draftKey, JSON.stringify(draftData));
+  };
+
   const startExam = async (exam) => {
     setActiveExam(exam);
-    setTimeLeft(exam.duration_minutes * 60);
 
     // Fetch questions
     const { data } = await supabase.from('questions')
@@ -54,25 +60,38 @@ const StudentFlow = () => {
     const savedDraft = localStorage.getItem(draftKey);
     if (savedDraft) {
       try {
-        setAnswers(JSON.parse(savedDraft));
-        toast.success('Recovered your previous answers from auto-save.');
+        const parsed = JSON.parse(savedDraft);
+        setAnswers(parsed.answers || {});
+        const elapsed = (Date.now() - (parsed.savedAt || Date.now())) / 1000;
+        const remaining = Math.max(0, Math.floor((parsed.timeLeft || exam.duration_minutes * 60) - elapsed));
+        setTimeLeft(remaining);
+        if (remaining > 0) toast.success('Recovered your previous answers and remaining time.');
+        else toast.success('Recovered your previous answers.');
       } catch (err) {
         console.error('Failed to parse draft', err);
+        setAnswers({});
+        setTimeLeft(exam.duration_minutes * 60);
       }
     } else {
       setAnswers({});
+      setTimeLeft(exam.duration_minutes * 60);
     }
 
     setExamState('taking_exam');
   };
 
-  // Auto-Save: Sync to local storage every time answers change
+  // Auto-Save: Sync to local storage every time answers or timer change
   useEffect(() => {
-    if (examState === 'taking_exam' && activeExam) {
-      const draftKey = `zibi_exam_draft_${activeExam.id}`;
-      localStorage.setItem(draftKey, JSON.stringify(answers));
-    }
+    saveDraft();
   }, [answers, examState, activeExam]);
+
+  // Also save draft on beforeunload (tab close / navigation)
+  useEffect(() => {
+    if (examState !== 'taking_exam') return;
+    const handleBeforeUnloadDraft = () => saveDraft();
+    window.addEventListener('beforeunload', handleBeforeUnloadDraft);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnloadDraft);
+  }, [examState, answers, activeExam, timeLeft]);
 
   const logInfraction = async (type, details) => {
     if (!activeExam || !user) return;
@@ -219,9 +238,14 @@ const StudentFlow = () => {
                         const script = takenScripts.find(s => s.assessment_id === exam.id);
                         return (
                           <div key={exam.id} style={{ background: 'var(--bg-surface-solid)', padding: '1.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-focus)', display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <div>
+                            <div style={{ flex: 1, minWidth: '200px' }}>
                               <h4 style={{ color: 'var(--accent-gold)', marginBottom: '0.25rem' }}>{exam.course_name} ({exam.course_code})</h4>
                               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Duration: {exam.duration_minutes} Minutes</p>
+                              {exam.instructions && (
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem', fontStyle: 'italic', opacity: 0.8 }}>
+                                  {exam.instructions}
+                                </p>
+                              )}
                             </div>
                             <div style={{ flex: '1 1 auto', maxWidth: '300px', textAlign: 'right' }}>
                               {script ? (
@@ -264,6 +288,11 @@ const StudentFlow = () => {
               <div>
                 <h3 style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-heading)', marginBottom: '0.25rem' }}>{activeExam.course_name} ({activeExam.course_code})</h3>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Proctoring Engine: <span style={{ color: '#4ade80' }}>Active & Recording</span></span>
+                {activeExam.instructions && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(197,160,89,0.08)', border: '1px solid var(--border-focus)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                    <strong style={{ color: 'var(--accent-gold)' }}>Instructions:</strong> {activeExam.instructions}
+                  </div>
+                )}
               </div>
               <div style={{ textAlign: 'right', minWidth: '120px' }}>
                 <span style={{ display: 'block', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Time Remaining</span>

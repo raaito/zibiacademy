@@ -55,6 +55,7 @@ CREATE TABLE public.assessments (
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
     is_open BOOLEAN DEFAULT false,
     semester TEXT DEFAULT 'First', -- 'First' or 'Second'
+    instructions TEXT DEFAULT '', -- Exam instructions for candidates
     created_by UUID REFERENCES public.profiles(id), -- The Examiner
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
