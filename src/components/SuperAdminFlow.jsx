@@ -3,20 +3,24 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+const PAGE_SIZE = 10;
+
 const SuperAdminFlow = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'cohorts', 'staff_codes'
+  const [activeTab, setActiveTab] = useState('candidates');
   
-  // Data states
-  const [users, setUsers] = useState([]);
   const [cohorts, setCohorts] = useState([]);
   const [staffCodes, setStaffCodes] = useState([]);
   const [loadingDb, setLoadingDb] = useState(true);
-  const [userPage, setUserPage] = useState(0);
-  const [userCount, setUserCount] = useState(0);
-  const PAGE_SIZE = 50;
 
-  // New cohort state
+  const [candidates, setCandidates] = useState([]);
+  const [candidatePage, setCandidatePage] = useState(0);
+  const [candidateCount, setCandidateCount] = useState(0);
+
+  const [staff, setStaff] = useState([]);
+  const [staffPage, setStaffPage] = useState(0);
+  const [staffCount, setStaffCount] = useState(0);
+
   const [newCohortName, setNewCohortName] = useState('');
   const [newStaffCode, setNewStaffCode] = useState('');
 
@@ -25,35 +29,64 @@ const SuperAdminFlow = () => {
   }, []);
 
   useEffect(() => {
-    if (!loadingDb) fetchUsersPage(userPage);
-  }, [userPage]);
+    if (!loadingDb) {
+      if (activeTab === 'candidates') fetchCandidatesPage(candidatePage);
+      if (activeTab === 'staff') fetchStaffPage(staffPage);
+    }
+  }, [activeTab]);
 
-  const fetchUsersPage = async (page) => {
+  useEffect(() => {
+    if (!loadingDb && activeTab === 'candidates') fetchCandidatesPage(candidatePage);
+  }, [candidatePage]);
+
+  useEffect(() => {
+    if (!loadingDb && activeTab === 'staff') fetchStaffPage(staffPage);
+  }, [staffPage]);
+
+  const fetchCandidatesPage = async (page) => {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
     const { data } = await supabase
       .from('profiles')
       .select('*')
+      .eq('role', 'candidate')
       .order('created_at', { ascending: false })
       .range(from, to);
-    if (data) setUsers(data);
+    if (data) setCandidates(data);
+  };
+
+  const fetchStaffPage = async (page) => {
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('role', ['examiner', 'superadmin'])
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (data) setStaff(data);
   };
 
   const fetchData = async () => {
     setLoadingDb(true);
-    const { count } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
-    if (count !== null) setUserCount(count);
 
-    const [ {data: cohortsData}, {data: codesData} ] = await Promise.all([
+    const [{ count: candCount }, { count: stCount }] = await Promise.all([
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'candidate'),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['examiner', 'superadmin'])
+    ]);
+    if (candCount !== null) setCandidateCount(candCount);
+    if (stCount !== null) setStaffCount(stCount);
+
+    const [{ data: cohortsData }, { data: codesData }] = await Promise.all([
       supabase.from('academic_years').select('*').order('created_at', { ascending: false }),
       supabase.from('valid_staff_codes').select('*').order('created_at', { ascending: false })
     ]);
-    
+
     if (cohortsData) setCohorts(cohortsData);
     if (codesData) setStaffCodes(codesData);
-    await fetchUsersPage(0);
+
+    await fetchCandidatesPage(0);
+    await fetchStaffPage(0);
     setLoadingDb(false);
   };
 
@@ -68,39 +101,21 @@ const SuperAdminFlow = () => {
     if (!error && data) {
       setCohorts([data, ...cohorts]);
       setNewCohortName('');
-      toast.success("Academic Cycle Created Successfully!");
+      toast.success('Academic Cycle Created Successfully!');
     } else if (error) {
-      toast.error("Error: " + error.message);
+      toast.error('Error: ' + error.message);
     }
   };
 
-  const updateUserRole = async (userId, newRole) => {
-    // Optimistic update
-    setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
-    await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
-  };
-
-  const updateUserCohort = async (userId, newCohortId) => {
-    const val = newCohortId === "unassigned" ? null : newCohortId;
-    setUsers(users.map(u => u.id === userId ? { ...u, cohort_id: val } : u));
-    await supabase.from('profiles').update({ cohort_id: val }).eq('id', userId);
-  };
-
-  const updateUserSemester = async (userId, newSemester) => {
-    setUsers(users.map(u => u.id === userId ? { ...u, semester: newSemester } : u));
-    await supabase.from('profiles').update({ semester: newSemester }).eq('id', userId);
-  };
-
-  const updateUserProgramType = async (userId, newProgramType) => {
-    setUsers(users.map(u => u.id === userId ? { ...u, program_type: newProgramType } : u));
-    await supabase.from('profiles').update({ program_type: newProgramType }).eq('id', userId);
+  const updateUser = async (userId, updates) => {
+    setCandidates(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
+    setStaff(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
+    await supabase.from('profiles').update(updates).eq('id', userId);
   };
 
   const toggleUserStatus = async (userId, currentStatus) => {
-    const newStatus = !currentStatus;
-    setUsers(users.map(u => u.id === userId ? { ...u, is_active: newStatus } : u));
-    await supabase.from('profiles').update({ is_active: newStatus }).eq('id', userId);
-    toast.success(`User ${newStatus ? 'activated' : 'deactivated'} successfully.`);
+    await updateUser(userId, { is_active: !currentStatus });
+    toast.success(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully.`);
   };
 
   const handleToggleCohortState = async (cohortId, currentState) => {
@@ -110,18 +125,19 @@ const SuperAdminFlow = () => {
 
   const deleteUser = async (userId) => {
     if (userId === profile.id) {
-      toast.error("You cannot delete your own account.");
+      toast.error('You cannot delete your own account.');
       return;
     }
-    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
 
-    setUsers(users.filter(u => u.id !== userId));
+    setCandidates(prev => prev.filter(u => u.id !== userId));
+    setStaff(prev => prev.filter(u => u.id !== userId));
     const { error } = await supabase.from('profiles').delete().eq('id', userId);
     if (error) {
       toast.error(error.message);
       fetchData();
     } else {
-      toast.success("User deleted successfully.");
+      toast.success('User deleted successfully.');
     }
   };
 
@@ -136,49 +152,185 @@ const SuperAdminFlow = () => {
     if (!error && data) {
       setStaffCodes([data, ...staffCodes]);
       setNewStaffCode('');
-      toast.success("Staff Verification Code Generated!");
+      toast.success('Staff Verification Code Generated!');
     } else if (error) {
-      toast.error("Error: " + error.message);
+      toast.error('Error: ' + error.message);
     }
   };
 
   const deleteStaffCode = async (code) => {
     setStaffCodes(staffCodes.filter(c => c.code !== code));
     await supabase.from('valid_staff_codes').delete().eq('code', code);
-    toast.success("Code removed.");
+    toast.success('Code removed.');
   };
+
+  const Pagination = ({ page, setPage, count }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+        Showing {Math.min(PAGE_SIZE, count - page * PAGE_SIZE)} of {count} records
+      </span>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <button
+          className="btn-premium"
+          disabled={page === 0}
+          onClick={() => setPage(p => p - 1)}
+          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: page === 0 ? 0.5 : 1 }}
+        >Previous</button>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Page {page + 1} of {Math.max(1, Math.ceil(count / PAGE_SIZE))}</span>
+        <button
+          className="btn-premium"
+          disabled={(page + 1) * PAGE_SIZE >= count}
+          onClick={() => setPage(p => p + 1)}
+          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: (page + 1) * PAGE_SIZE >= count ? 0.5 : 1 }}
+        >Next</button>
+      </div>
+    </div>
+  );
+
+  const UserTable = ({ users, roleFilter }) => (
+    <div>
+      <Pagination
+        page={roleFilter === 'candidate' ? candidatePage : staffPage}
+        setPage={roleFilter === 'candidate' ? setCandidatePage : setStaffPage}
+        count={roleFilter === 'candidate' ? candidateCount : staffCount}
+      />
+      <div className="admin-table-container" style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Name / Email</th>
+              <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Matric / Staff Code</th>
+              <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Role</th>
+              {roleFilter === 'candidate' && (
+                <>
+                  <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Cohort</th>
+                  <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Semester</th>
+                  <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Academic Track</th>
+                </>
+              )}
+              <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
+              <th style={{ padding: '1rem', color: 'var(--accent-gold)', textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <td style={{ padding: '1rem' }}>
+                  <span style={{ display: 'block', color: 'var(--text-ivory)' }}>{u.full_name}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</span>
+                </td>
+                <td style={{ padding: '1rem' }}>
+                  {u.role === 'candidate' ? (u.matriculation_number || 'N/A') : (u.staff_code || 'N/A')}
+                </td>
+                <td style={{ padding: '1rem' }}>
+                  <select
+                    value={u.role}
+                    onChange={(e) => updateUser(u.id, { role: e.target.value })}
+                    style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
+                  >
+                    <option value="candidate">Candidate</option>
+                    <option value="examiner">Examiner</option>
+                    <option value="superadmin">Superadmin</option>
+                  </select>
+                </td>
+                {roleFilter === 'candidate' && (
+                  <>
+                    <td style={{ padding: '1rem' }}>
+                      <select
+                        value={u.cohort_id || 'unassigned'}
+                        onChange={(e) => updateUser(u.id, { cohort_id: e.target.value === 'unassigned' ? null : e.target.value })}
+                        style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
+                      >
+                        <option value="unassigned">- Unassigned -</option>
+                        {cohorts.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <select
+                        value={u.semester || 'First'}
+                        onChange={(e) => updateUser(u.id, { semester: e.target.value })}
+                        style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
+                      >
+                        <option value="First">First</option>
+                        <option value="Second">Second</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <select
+                        value={u.program_type || 'multi-semester'}
+                        onChange={(e) => updateUser(u.id, { program_type: e.target.value })}
+                        style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
+                      >
+                        <option value="multi-semester">Standard (Multi-Semester)</option>
+                        <option value="stretch">Intensive (Stretch)</option>
+                      </select>
+                    </td>
+                  </>
+                )}
+                <td style={{ padding: '1rem' }}>
+                  <button
+                    onClick={() => toggleUserStatus(u.id, u.is_active)}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${u.is_active ? '#00cc66' : '#ffaa33'}`,
+                      color: u.is_active ? '#00cc66' : '#ffaa33',
+                      padding: '0.3rem 0.6rem',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      width: '80px'
+                    }}
+                  >
+                    {u.is_active ? 'ACTIVE' : 'INACTIVE'}
+                  </button>
+                </td>
+                <td style={{ padding: '1rem', textAlign: 'right' }}>
+                  <button
+                    onClick={() => deleteUser(u.id)}
+                    style={{ background: 'transparent', border: '1px solid rgba(255,77,79,0.3)', color: '#ff4d4f', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr><td colSpan={roleFilter === 'candidate' ? 8 : 4} style={{ textAlign: 'center', padding: '1rem' }}>No users found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   return (
     <main className="login-wrapper" style={{ alignItems: 'flex-start', paddingTop: '4rem' }}>
       <div className="glass-panel responsive-panel" style={{ maxWidth: '1000px', width: '100%' }}>
-        
+
         <header className="responsive-header" style={{ marginBottom: '2rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem' }}>
           <div>
             <h2 style={{ color: 'var(--text-ivory)', fontFamily: 'var(--font-heading)' }}>Super Admin Console</h2>
             <p style={{ color: 'var(--text-muted)' }}>Manage identities, roles, and academic cycles.</p>
           </div>
           <div className="responsive-tabs" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button 
-              className={`btn-premium ${activeTab === 'users' ? 'primary' : 'secondary'}`}
-              onClick={() => setActiveTab('users')}
-              style={{ padding: '0.6rem 1rem', flex: '1 1 auto', minWidth: '120px' }}
-            >
-              Identity Matrix
-            </button>
-            <button 
-              className={`btn-premium ${activeTab === 'cohorts' ? 'primary' : 'secondary'}`}
-              onClick={() => setActiveTab('cohorts')}
-              style={{ padding: '0.6rem 1rem', flex: '1 1 auto', minWidth: '120px' }}
-            >
-              Academic Cycles
-            </button>
-            <button 
-              className={`btn-premium ${activeTab === 'staff_codes' ? 'primary' : 'secondary'}`}
-              onClick={() => setActiveTab('staff_codes')}
-              style={{ padding: '0.6rem 1rem', flex: '1 1 auto', minWidth: '120px' }}
-            >
-              Staff Verification Codes
-            </button>
+            {[
+              { key: 'candidates', label: 'Candidates' },
+              { key: 'staff', label: 'Staff (Lecturers/Admin)' },
+              { key: 'cohorts', label: 'Academic Cycles' },
+              { key: 'staff_codes', label: 'Staff Codes' }
+            ].map(tab => (
+              <button
+                key={tab.key}
+                className={`btn-premium ${activeTab === tab.key ? 'primary' : 'secondary'}`}
+                onClick={() => setActiveTab(tab.key)}
+                style={{ padding: '0.6rem 1rem', flex: '1 1 auto', minWidth: '120px' }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </header>
 
@@ -186,141 +338,16 @@ const SuperAdminFlow = () => {
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Loading records...</div>
         ) : (
           <>
-            {activeTab === 'users' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    Showing {users.length} of {userCount} users
-                  </span>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <button
-                      className="btn-premium"
-                      disabled={userPage === 0}
-                      onClick={() => setUserPage(p => p - 1)}
-                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: userPage === 0 ? 0.5 : 1 }}
-                    >Previous</button>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Page {userPage + 1} of {Math.max(1, Math.ceil(userCount / PAGE_SIZE))}</span>
-                    <button
-                      className="btn-premium"
-                      disabled={(userPage + 1) * PAGE_SIZE >= userCount}
-                      onClick={() => setUserPage(p => p + 1)}
-                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', opacity: (userPage + 1) * PAGE_SIZE >= userCount ? 0.5 : 1 }}
-                    >Next</button>
-                  </div>
-                </div>
-              <div className="admin-table-container" style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Name / Email</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Matric / Staff Code</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Role</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Cohort</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Semester</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Academic Track</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)', textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map(u => (
-                      <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '1rem' }}>
-                          <span style={{ display: 'block', color: 'var(--text-ivory)' }}>{u.full_name}</span>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</span>
-                        </td>
-                        <td style={{ padding: '1rem' }}>
-                          {u.role === 'candidate' ? (u.matriculation_number || 'N/A') : (u.staff_code || 'N/A')}
-                        </td>
-                        <td style={{ padding: '1rem' }}>
-                          <select 
-                            value={u.role}
-                            onChange={(e) => updateUserRole(u.id, e.target.value)}
-                            style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
-                          >
-                            <option value="candidate">Candidate</option>
-                            <option value="examiner">Examiner</option>
-                            <option value="superadmin">Superadmin</option>
-                          </select>
-                        </td>
-                        <td style={{ padding: '1rem' }}>
-                          <select 
-                            value={u.cohort_id || 'unassigned'}
-                            onChange={(e) => updateUserCohort(u.id, e.target.value)}
-                            style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
-                            disabled={u.role !== 'candidate'}
-                          >
-                            <option value="unassigned">- Unassigned -</option>
-                            {cohorts.map(c => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td style={{ padding: '1rem' }}>
-                          <select 
-                            value={u.semester || 'First'}
-                            onChange={(e) => updateUserSemester(u.id, e.target.value)}
-                            style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
-                            disabled={u.role !== 'candidate'}
-                          >
-                            <option value="First">First</option>
-                            <option value="Second">Second</option>
-                          </select>
-                        </td>
-                        <td style={{ padding: '1rem' }}>
-                          <select 
-                            value={u.program_type || 'multi-semester'}
-                            onChange={(e) => updateUserProgramType(u.id, e.target.value)}
-                            style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '0.4rem', borderRadius: '4px', outline: 'none' }}
-                            disabled={u.role !== 'candidate'}
-                          >
-                            <option value="multi-semester">Standard (Multi-Semester)</option>
-                            <option value="stretch">Intensive (Stretch)</option>
-                          </select>
-                        </td>
-                        <td style={{ padding: '1rem' }}>
-                          <button 
-                            onClick={() => toggleUserStatus(u.id, u.is_active)}
-                            style={{ 
-                              background: 'transparent',
-                              border: `1px solid ${u.is_active ? '#00cc66' : '#ffaa33'}`,
-                              color: u.is_active ? '#00cc66' : '#ffaa33',
-                              padding: '0.3rem 0.6rem',
-                              borderRadius: '4px',
-                              fontSize: '0.75rem',
-                              cursor: 'pointer',
-                              fontWeight: 'bold',
-                              width: '80px'
-                            }}
-                          >
-                            {u.is_active ? 'ACTIVE' : 'INACTIVE'}
-                          </button>
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right' }}>
-                          <button 
-                            onClick={() => deleteUser(u.id)}
-                            style={{ background: 'transparent', border: '1px solid rgba(255,77,79,0.3)', color: '#ff4d4f', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {users.length === 0 && (
-                      <tr><td colSpan="4" style={{ textAlign: 'center', padding: '1rem' }}>No users found.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              </div>
-            )}
+            {activeTab === 'candidates' && <UserTable users={candidates} roleFilter="candidate" />}
+
+            {activeTab === 'staff' && <UserTable users={staff} roleFilter="staff" />}
 
             {activeTab === 'cohorts' && (
               <div>
                 <form onSubmit={handleCreateCohort} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. 2026/2027" 
+                  <input
+                    type="text"
+                    placeholder="e.g. 2026/2027"
                     value={newCohortName}
                     onChange={(e) => setNewCohortName(e.target.value)}
                     style={{ flex: 1, padding: '0.75rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', borderRadius: '4px', outline: 'none' }}
@@ -342,9 +369,9 @@ const SuperAdminFlow = () => {
                         <tr key={c.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                           <td style={{ padding: '1rem', color: 'var(--text-ivory)' }}>{c.name}</td>
                           <td style={{ padding: '1rem' }}>
-                            <span style={{ 
-                              padding: '0.2rem 0.5rem', 
-                              borderRadius: '12px', 
+                            <span style={{
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '12px',
                               fontSize: '0.8rem',
                               background: c.is_active ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 77, 79, 0.1)',
                               color: c.is_active ? '#00ff88' : '#ff4d4f'
@@ -353,7 +380,7 @@ const SuperAdminFlow = () => {
                             </span>
                           </td>
                           <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <button 
+                            <button
                               onClick={() => handleToggleCohortState(c.id, c.is_active)}
                               className="btn-premium"
                               style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', opacity: 0.8 }}
@@ -375,9 +402,9 @@ const SuperAdminFlow = () => {
             {activeTab === 'staff_codes' && (
               <div>
                 <form onSubmit={handleCreateStaffCode} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-                  <input 
-                    type="text" 
-                    placeholder="Enter Unique Staff Code (e.g. ZA-ADMIN-2026)" 
+                  <input
+                    type="text"
+                    placeholder="Enter Unique Staff Code (e.g. ZA-ADMIN-2026)"
                     value={newStaffCode}
                     onChange={(e) => setNewStaffCode(e.target.value)}
                     style={{ flex: 1, padding: '0.75rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', borderRadius: '4px', outline: 'none' }}
@@ -400,9 +427,9 @@ const SuperAdminFlow = () => {
                         <tr key={c.code} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                           <td style={{ padding: '1rem', color: 'var(--text-ivory)', fontFamily: 'monospace', letterSpacing: '1px' }}>{c.code}</td>
                           <td style={{ padding: '1rem' }}>
-                            <span style={{ 
-                              padding: '0.2rem 0.5rem', 
-                              borderRadius: '12px', 
+                            <span style={{
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '12px',
                               fontSize: '0.8rem',
                               background: c.is_used ? 'rgba(255, 77, 79, 0.1)' : 'rgba(0, 255, 136, 0.1)',
                               color: c.is_used ? '#ff4d4f' : '#00ff88'
@@ -414,7 +441,7 @@ const SuperAdminFlow = () => {
                             {new Date(c.created_at).toLocaleDateString()}
                           </td>
                           <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <button 
+                            <button
                               onClick={() => deleteStaffCode(c.code)}
                               className="btn-premium"
                               style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#ff4d4f', borderColor: 'rgba(255,77,79,0.3)' }}
