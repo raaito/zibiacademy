@@ -34,17 +34,25 @@ const StudentFlow = () => {
     if (data) {
       setAssessments(data);
       const ids = data.map(a => a.id);
+
+      const map = {};
       const { data: totals } = await supabase
         .from('questions')
         .select('assessment_id, points')
         .in('assessment_id', ids);
       if (totals) {
-        const map = {};
         totals.forEach(q => { map[q.assessment_id] = (map[q.assessment_id] || 0) + q.points; });
-        setTotalScoresMap(map);
       }
+
       const { data: scripts } = await supabase.from('candidate_scripts').select('*').eq('candidate_id', user.id);
-      if (scripts) setTakenScripts(scripts);
+      if (scripts) {
+        scripts.forEach(s => {
+          if (s.total_possible_score > 0) map[s.assessment_id] = s.total_possible_score;
+        });
+        setTakenScripts(scripts);
+      }
+
+      setTotalScoresMap(map);
     }
   };
 
@@ -254,7 +262,7 @@ const StudentFlow = () => {
                     <div>
                         {list.map(exam => {
                         const script = takenScripts.find(s => s.assessment_id === exam.id);
-                        const totalPossible = script ? script.total_possible_score : (totalScoresMap[exam.id] || 0);
+                        const totalPossible = script ? (script.total_possible_score || totalScoresMap[exam.id] || 0) : (totalScoresMap[exam.id] || 0);
                         return (
                           <div key={exam.id} style={{ background: 'var(--bg-surface-solid)', padding: '1.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-focus)', display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ flex: 1, minWidth: '200px' }}>
