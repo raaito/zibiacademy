@@ -33,6 +33,7 @@ const ExaminerFlow = () => {
   const [activeScript, setActiveScript] = useState(null);
   const [gradingQuestions, setGradingQuestions] = useState([]);
   const [gradingQuestionsLoading, setGradingQuestionsLoading] = useState(false);
+  const [scriptInfractions, setScriptInfractions] = useState([]);
 
   useEffect(() => {
     if (user) {
@@ -152,6 +153,15 @@ const ExaminerFlow = () => {
       .order('sequence_number', { ascending: true });
     if (data) setGradingQuestions(data);
     setGradingQuestionsLoading(false);
+  };
+
+  const fetchInfractions = async (candidateId, assessmentId) => {
+    const { data } = await supabase.from('infraction_logs')
+      .select('*')
+      .eq('candidate_id', candidateId)
+      .eq('assessment_id', assessmentId)
+      .order('logged_at', { ascending: true });
+    if (data) setScriptInfractions(data);
   };
 
   const toggleAssessmentStatus = async (id, currentStatus) => {
@@ -524,7 +534,7 @@ const ExaminerFlow = () => {
                         <td style={{ padding: '1rem' }}>{s.auto_mcq_score}</td>
                         <td style={{ padding: '1rem' }}>{s.manual_theory_score}</td>
                         <td style={{ padding: '1rem' }}>
-                          <button onClick={() => { setActiveScript(s); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.8rem' }}>Review Script</button>
+                          <button onClick={() => { setActiveScript(s); setScriptInfractions([]); fetchInfractions(s.candidate_id, selectedAssessmentId); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.8rem' }}>Review Script</button>
                         </td>
                       </tr>
                     ))}
@@ -603,6 +613,24 @@ const ExaminerFlow = () => {
                     </pre>
                   )}
                 </div>
+
+                {scriptInfractions.length > 0 && (
+                  <div style={{ marginBottom: '2rem' }}>
+                    <h4 style={{ color: '#ff4d4f', marginBottom: '1rem' }}>Proctoring Log ({scriptInfractions.length} infractions)</h4>
+                    <div style={{ maxHeight: '200px', overflowY: 'auto', background: 'var(--bg-obsidian)', borderRadius: '4px', padding: '0.75rem' }}>
+                      {scriptInfractions.map(inf => (
+                        <div key={inf.id} style={{ display: 'flex', gap: '1rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
+                          <span style={{ color: 'var(--text-muted)', minWidth: '140px' }}>{new Date(inf.logged_at).toLocaleTimeString()}</span>
+                          <span style={{
+                            color: inf.infraction_type === 'visibilitychange' ? '#ff4d4f' : '#ffaa33',
+                            fontWeight: 'bold', minWidth: '120px'
+                          }}>{inf.infraction_type}</span>
+                          <span style={{ color: 'var(--text-ivory)' }}>{inf.details}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '2rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>

@@ -21,6 +21,9 @@ const SuperAdminFlow = () => {
   const [expandedExaminers, setExpandedExaminers] = useState({});
   const [questionsByAssessment, setQuestionsByAssessment] = useState({});
 
+  const [proctorData, setProctorData] = useState([]);
+  const [proctorLoading, setProctorLoading] = useState(false);
+
   const [staff, setStaff] = useState([]);
   const [staffPage, setStaffPage] = useState(0);
   const [staffCount, setStaffCount] = useState(0);
@@ -215,6 +218,20 @@ const SuperAdminFlow = () => {
     if (!loadingDb && activeTab === 'assessments') fetchAllAssessments();
   }, [activeTab, loadingDb]);
 
+  const fetchProctorLogs = async () => {
+    setProctorLoading(true);
+    const { data } = await supabase
+      .from('infraction_logs')
+      .select('*, profiles(full_name, matriculation_number), assessments(course_code, course_name)')
+      .order('logged_at', { ascending: false });
+    if (data) setProctorData(data);
+    setProctorLoading(false);
+  };
+
+  useEffect(() => {
+    if (!loadingDb && activeTab === 'proctoring') fetchProctorLogs();
+  }, [activeTab, loadingDb]);
+
   const Pagination = ({ page, setPage, count }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
@@ -371,6 +388,7 @@ const SuperAdminFlow = () => {
               { key: 'candidates', label: 'Candidates' },
               { key: 'staff', label: 'Staff (Lecturers/Admin)' },
               { key: 'assessments', label: 'Assessments' },
+              { key: 'proctoring', label: 'Proctoring' },
               { key: 'cohorts', label: 'Academic Cycles' },
               { key: 'staff_codes', label: 'Staff Codes' }
             ].map(tab => (
@@ -468,6 +486,61 @@ const SuperAdminFlow = () => {
                       )}
                     </div>
                   ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'proctoring' && (
+              <div>
+                <h3 style={{ color: 'var(--text-ivory)', marginBottom: '1rem' }}>Proctoring Logs</h3>
+                {proctorLoading ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading logs...</div>
+                ) : proctorData.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No infractions recorded.</div>
+                ) : (
+                  <div className="admin-table-container" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
+                      <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface-solid)' }}>
+                        <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Time</th>
+                          <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Candidate</th>
+                          <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Assessment</th>
+                          <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Type</th>
+                          <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {proctorData.map(inf => (
+                          <tr key={inf.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                            <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                              {new Date(inf.logged_at).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{ color: 'var(--text-ivory)' }}>{inf.profiles?.full_name || 'Unknown'}</span>
+                              {inf.profiles?.matriculation_number && (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+                                  ({inf.profiles.matriculation_number})
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.85rem' }}>
+                              {inf.assessments?.course_code} - {inf.assessments?.course_name}
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{
+                                padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold',
+                                background: inf.infraction_type === 'visibilitychange' ? 'rgba(255,77,79,0.15)' : 'rgba(255,170,51,0.15)',
+                                color: inf.infraction_type === 'visibilitychange' ? '#ff4d4f' : '#ffaa33'
+                              }}>
+                                {inf.infraction_type}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-ivory)' }}>{inf.details}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}
