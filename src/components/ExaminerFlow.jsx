@@ -167,8 +167,11 @@ const ExaminerFlow = () => {
     setSelectedAssessmentId(aid);
     setEditingQuestion(null);
     resetQuestionForm();
-    if (aid) fetchQuestions(aid);
-    else setQuestions([]);
+    if (aid) {
+      const assessment = assessments.find(a => a.id === aid);
+      if (assessment) setQType(assessment.question_type || 'mcq');
+      fetchQuestions(aid);
+    } else setQuestions([]);
   };
 
   const handleAssessmentSelectForGrading = async (e) => {
@@ -188,7 +191,6 @@ const ExaminerFlow = () => {
   };
 
   const resetQuestionForm = () => {
-    setQType('mcq');
     setQuestionText('');
     setPoints(5);
     setOptions('Option A, Option B, Option C, Option D');

@@ -17,6 +17,10 @@ const SuperAdminFlow = () => {
   const [candidatePage, setCandidatePage] = useState(0);
   const [candidateCount, setCandidateCount] = useState(0);
 
+  const [assessmentsByExaminer, setAssessmentsByExaminer] = useState({});
+  const [expandedExaminers, setExpandedExaminers] = useState({});
+  const [questionsByAssessment, setQuestionsByAssessment] = useState({});
+
   const [staff, setStaff] = useState([]);
   const [staffPage, setStaffPage] = useState(0);
   const [staffCount, setStaffCount] = useState(0);
@@ -163,6 +167,53 @@ const SuperAdminFlow = () => {
     await supabase.from('valid_staff_codes').delete().eq('code', code);
     toast.success('Code removed.');
   };
+
+  const fetchAllAssessments = async () => {
+    const { data: assessData } = await supabase
+      .from('assessments')
+      .select('*, profiles(full_name, email, staff_code)')
+      .order('created_at', { ascending: false });
+    if (!assessData) return;
+
+    const assessmentIds = assessData.map(a => a.id);
+    const { data: qData } = await supabase
+      .from('questions')
+      .select('*')
+      .in('assessment_id', assessmentIds)
+      .order('sequence_number', { ascending: true });
+
+    const qMap = {};
+    if (qData) {
+      qData.forEach(q => {
+        if (!qMap[q.assessment_id]) qMap[q.assessment_id] = [];
+        qMap[q.assessment_id].push(q);
+      });
+    }
+    setQuestionsByAssessment(qMap);
+
+    const grouped = {};
+    assessData.forEach(a => {
+      const creatorId = a.created_by;
+      const creator = a.profiles;
+      const key = creatorId || 'unknown';
+      if (!grouped[key]) {
+        grouped[key] = {
+          examiner: creator || { full_name: 'Unknown', email: '', staff_code: '' },
+          assessments: []
+        };
+      }
+      grouped[key].assessments.push(a);
+    });
+    setAssessmentsByExaminer(grouped);
+
+    const expanded = {};
+    Object.keys(grouped).forEach(k => { expanded[k] = false; });
+    setExpandedExaminers(expanded);
+  };
+
+  useEffect(() => {
+    if (!loadingDb && activeTab === 'assessments') fetchAllAssessments();
+  }, [activeTab, loadingDb]);
 
   const Pagination = ({ page, setPage, count }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -319,6 +370,7 @@ const SuperAdminFlow = () => {
             {[
               { key: 'candidates', label: 'Candidates' },
               { key: 'staff', label: 'Staff (Lecturers/Admin)' },
+              { key: 'assessments', label: 'Assessments' },
               { key: 'cohorts', label: 'Academic Cycles' },
               { key: 'staff_codes', label: 'Staff Codes' }
             ].map(tab => (
@@ -341,6 +393,84 @@ const SuperAdminFlow = () => {
             {activeTab === 'candidates' && <UserTable users={candidates} roleFilter="candidate" />}
 
             {activeTab === 'staff' && <UserTable users={staff} roleFilter="staff" />}
+
+            {activeTab === 'assessments' && (
+              <div>
+                <h3 style={{ color: 'var(--text-ivory)', marginBottom: '1rem' }}>All Assessments by Examiner</h3>
+                {Object.keys(assessmentsByExaminer).length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No assessments found.</div>
+                ) : (
+                  Object.entries(assessmentsByExaminer).map(([key, group]) => (
+                    <div key={key} style={{ marginBottom: '2rem', background: 'var(--bg-surface-solid)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div
+                        onClick={() => setExpandedExaminers(prev => ({ ...prev, [key]: !prev[key] }))}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '1rem 1.5rem', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)',
+                          background: 'var(--bg-surface-hover)'
+                        }}
+                      >
+                        <div>
+                          <span style={{ color: 'var(--accent-gold)', fontWeight: 'bold', fontSize: '1.05rem' }}>{group.examiner.full_name}</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginLeft: '1rem' }}>{group.examiner.email}</span>
+                          {group.examiner.staff_code && (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: '0.5rem' }}>({group.examiner.staff_code})</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{group.assessments.length} assessment{group.assessments.length !== 1 ? 's' : ''}</span>
+                          <span style={{ color: 'var(--text-ivory)', fontSize: '0.85rem' }}>{expandedExaminers[key] ? '▲' : '▼'}</span>
+                        </div>
+                      </div>
+                      {expandedExaminers[key] && (
+                        <div style={{ padding: '1rem 1.5rem' }}>
+                          {group.assessments.map(a => {
+                            const qs = questionsByAssessment[a.id] || [];
+                            const totalPts = qs.reduce((sum, q) => sum + q.points, 0);
+                            return (
+                              <div key={a.id} style={{ marginBottom: '1.5rem', borderLeft: '3px solid var(--accent-gold)', paddingLeft: '1rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                  <div>
+                                    <span style={{ color: 'var(--text-ivory)', fontWeight: 'bold' }}>{a.course_name} ({a.course_code})</span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginLeft: '0.75rem' }}>{a.semester} Semester</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    <span>Type: <strong style={{ color: 'var(--accent-gold)' }}>{a.question_type === 'mcq' ? 'MCQ' : 'Theory'}</strong></span>
+                                    <span>Duration: {a.duration_minutes}m</span>
+                                    <span>Status: <strong style={{ color: a.is_open ? '#00ff88' : '#ff4d4f' }}>{a.is_open ? 'Open' : 'Closed'}</strong></span>
+                                    <span>Total: {totalPts} pts</span>
+                                  </div>
+                                </div>
+                                {qs.length > 0 ? (
+                                  <div style={{ fontSize: '0.85rem', color: 'var(--text-body)' }}>
+                                    {qs.map((q, i) => (
+                                      <div key={q.id} style={{ padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                        <span style={{ color: 'var(--accent-gold)' }}>Q{i+1}.</span>
+                                        <span style={{ marginLeft: '0.5rem' }}>{q.question_text}</span>
+                                        <span style={{ color: 'var(--text-muted)', marginLeft: '0.75rem' }}>
+                                          ({q.q_type.toUpperCase()}, {q.points} pts)
+                                        </span>
+                                        {q.q_type === 'mcq' && (
+                                          <span style={{ color: '#00ff88', marginLeft: '0.75rem', fontSize: '0.8rem' }}>
+                                            Ans: {q.correct_answer}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No questions added yet.</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             {activeTab === 'cohorts' && (
               <div>

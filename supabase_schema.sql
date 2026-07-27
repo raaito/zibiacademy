@@ -84,6 +84,7 @@ CREATE TABLE public.candidate_scripts (
     answers JSONB NOT NULL, -- The payload of student answers
     auto_mcq_score INTEGER DEFAULT 0,
     manual_theory_score INTEGER DEFAULT 0,
+    total_possible_score INTEGER DEFAULT 0, -- Total points possible for this assessment
     question_scores JSONB DEFAULT '{}'::jsonb, -- Per-question scores {question_id: score}
     is_graded BOOLEAN DEFAULT false,
     submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

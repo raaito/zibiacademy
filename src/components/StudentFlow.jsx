@@ -183,8 +183,10 @@ const StudentFlow = () => {
     if (!activeExam || !user) return;
 
     let mcqScore = 0;
+    let totalPossible = 0;
     const questionScores = {};
     questions.forEach(q => {
+      totalPossible += q.points;
       if (q.q_type === 'mcq') {
         const isCorrect = answers[q.id] === q.correct_answer;
         const pts = isCorrect ? q.points : 0;
@@ -198,6 +200,7 @@ const StudentFlow = () => {
       assessment_id: activeExam.id,
       answers: answers,
       auto_mcq_score: mcqScore,
+      total_possible_score: totalPossible,
       question_scores: questionScores,
       is_graded: false
     });
@@ -249,9 +252,9 @@ const StudentFlow = () => {
                     </div>
                   ) : (
                     <div>
-                      {list.map(exam => {
+                        {list.map(exam => {
                         const script = takenScripts.find(s => s.assessment_id === exam.id);
-                        const totalPossible = totalScoresMap[exam.id] || 0;
+                        const totalPossible = script ? script.total_possible_score : (totalScoresMap[exam.id] || 0);
                         return (
                           <div key={exam.id} style={{ background: 'var(--bg-surface-solid)', padding: '1.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-focus)', display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ flex: 1, minWidth: '200px' }}>
