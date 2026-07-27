@@ -5,7 +5,7 @@ import AuthFlow from './components/AuthFlow'
 import SuperAdminFlow from './components/SuperAdminFlow'
 import ExaminerFlow from './components/ExaminerFlow'
 import StudentFlow from './components/StudentFlow'
-import AdminCandidatesFlow from './components/AdminCandidatesFlow'
+import AdminStudentsFlow from './components/AdminStudentsFlow'
 import RegisterFlow from './components/RegisterFlow'
 import StaffRegisterFlow from './components/StaffRegisterFlow'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -51,7 +51,7 @@ const Navigation = () => {
               <>
                 <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Admin Console</Link>
                 <Link to="/examiner" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Examiner Portal</Link>
-                <Link to="/candidates" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Candidates View</Link>
+                <Link to="/students" onClick={() => setIsMenuOpen(false)} className="nav-item hover-gold">Students View</Link>
               </>
             )}
             {profile?.role === 'examiner' && (
@@ -154,10 +154,10 @@ function App() {
               </ErrorBoundary>
             } />
 
-            <Route path="/candidates/*" element={
+            <Route path="/students/*" element={
               <ErrorBoundary>
                 <ProtectedRoute allowedRoles={['superadmin']}>
-                  <AdminCandidatesFlow />
+                  <AdminStudentsFlow />
                 </ProtectedRoute>
               </ErrorBoundary>
             } />

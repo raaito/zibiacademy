@@ -3,6 +3,24 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+const cipherKey = (uid) => uid.replace(/-/g, '').substring(0, 32);
+
+const encrypt = (text, key) => {
+  const data = new TextEncoder().encode(text);
+  const k = new TextEncoder().encode(key);
+  const enc = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i++) enc[i] = data[i] ^ k[i % k.length];
+  return btoa(String.fromCharCode(...enc));
+};
+
+const decrypt = (encoded, key) => {
+  const enc = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+  const k = new TextEncoder().encode(key);
+  const dec = new Uint8Array(enc.length);
+  for (let i = 0; i < enc.length; i++) dec[i] = enc[i] ^ k[i % k.length];
+  return new TextDecoder().decode(dec);
+};
+
 const StudentFlow = () => {
   const { user, profile } = useAuth();
   const [examState, setExamState] = useState('dashboard'); // dashboard, taking_exam, finished
@@ -21,6 +39,8 @@ const StudentFlow = () => {
   const [deviceInfo, setDeviceInfo] = useState('');
   const [ipAddress, setIpAddress] = useState('');
   const [locationCoords, setLocationCoords] = useState(null);
+
+  let examStartRef = React.useRef(null);
 
   useEffect(() => {
     if (user && profile && examState === 'dashboard') {
@@ -65,7 +85,8 @@ const StudentFlow = () => {
     if (!activeExam || examState !== 'taking_exam') return;
     const draftKey = `zibi_exam_draft_${activeExam.id}`;
     const draftData = { answers, timeLeft, savedAt: Date.now() };
-    localStorage.setItem(draftKey, JSON.stringify(draftData));
+    const key = cipherKey(user?.id || '');
+    localStorage.setItem(draftKey, encrypt(JSON.stringify(draftData), key));
   };
 
   const captureDeviceInfo = () => {
@@ -106,20 +127,24 @@ const StudentFlow = () => {
     const savedDraft = localStorage.getItem(draftKey);
     if (savedDraft) {
       try {
-        const parsed = JSON.parse(savedDraft);
+        const key = cipherKey(user?.id || '');
+        const parsed = JSON.parse(decrypt(savedDraft, key));
         setAnswers(parsed.answers || {});
         const elapsed = (Date.now() - (parsed.savedAt || Date.now())) / 1000;
         const remaining = Math.max(0, Math.floor((parsed.timeLeft || exam.duration_minutes * 60) - elapsed));
+        examStartRef.current = Date.now() - ((exam.duration_minutes * 60) - remaining) * 1000;
         setTimeLeft(remaining);
         if (remaining > 0) toast.success('Recovered your previous answers and remaining time.');
         else toast.success('Recovered your previous answers.');
       } catch (err) {
         console.error('Failed to parse draft', err);
         setAnswers({});
+        examStartRef.current = Date.now();
         setTimeLeft(exam.duration_minutes * 60);
       }
     } else {
       setAnswers({});
+      examStartRef.current = Date.now();
       setTimeLeft(exam.duration_minutes * 60);
     }
 
@@ -139,18 +164,50 @@ const StudentFlow = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnloadDraft);
   }, [examState, answers, activeExam, timeLeft]);
 
+  const infractionQueue = React.useRef([]);
+  const infractionRetrying = React.useRef(false);
+
+  const processInfractionQueue = async () => {
+    if (infractionRetrying.current || infractionQueue.current.length === 0) return;
+    infractionRetrying.current = true;
+    const item = infractionQueue.current[0];
+    const { error } = await supabase.from('infraction_logs').insert(item);
+    if (!error) {
+      infractionQueue.current.shift();
+    }
+    infractionRetrying.current = false;
+    if (infractionQueue.current.length > 0) processInfractionQueue();
+  };
+
   const logInfraction = async (type, details) => {
     if (!activeExam || !user) return;
     const qNum = currentQuestionIndex + 1;
     const totalQs = questions.length;
     const timeRemaining = formatTime(timeLeft);
     const enriched = `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
-    await supabase.from('infraction_logs').insert({
+    const payload = {
       candidate_id: user.id,
       assessment_id: activeExam.id,
       infraction_type: type,
       details: enriched
-    });
+    };
+    const { error } = await supabase.from('infraction_logs').insert(payload);
+    if (error) {
+      infractionQueue.current.push(payload);
+      processInfractionQueue();
+    }
+  };
+
+  // Inactivity timeout: auto-submit after 5 minutes of no mouse/keyboard activity
+  let idleTimer = React.useRef(null);
+  const IDLE_TIMEOUT = 5 * 60;
+
+  const resetIdleTimer = () => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => {
+      logInfraction('inactivity', `Auto-submitted after ${IDLE_TIMEOUT}s of inactivity`);
+      submitExam(true);
+    }, IDLE_TIMEOUT * 1000);
   };
 
   // Anti-Cheat Engine Log
@@ -201,6 +258,10 @@ const StudentFlow = () => {
       e.returnValue = 'You have an exam in progress. Are you sure you want to leave?';
     };
 
+    resetIdleTimer();
+    const activityEvents = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    activityEvents.forEach(ev => document.addEventListener(ev, resetIdleTimer));
+
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
@@ -216,6 +277,8 @@ const StudentFlow = () => {
     document.body.style.webkitUserSelect = 'none';
 
     return () => {
+      activityEvents.forEach(ev => document.removeEventListener(ev, resetIdleTimer));
+      if (idleTimer.current) clearTimeout(idleTimer.current);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
@@ -230,20 +293,37 @@ const StudentFlow = () => {
     };
   }, [examState, activeExam, currentQuestionIndex, questions.length, timeLeft]);
 
-  // Timer
+  // Timer (epoch-based to prevent drift)
   useEffect(() => {
-    if (examState !== 'taking_exam' || timeLeft <= 0) {
-      if (examState === 'taking_exam' && timeLeft <= 0) {
-        submitExam(); // Auto submit
-      }
+    if (examState !== 'taking_exam') return;
+    const tick = () => {
+      if (!examStartRef.current) return;
+      const elapsed = Math.floor((Date.now() - examStartRef.current) / 1000);
+      const remaining = Math.max(0, (activeExam?.duration_minutes || 0) * 60 - elapsed);
+      setTimeLeft(remaining);
+      if (remaining <= 0) submitExam(true);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [examState]);
+
+  const submitExam = async (isAutoSubmit = false) => {
+    if (!activeExam || !user) return;
+
+    const { data: freshExam } = await supabase.from('assessments').select('is_open').eq('id', activeExam.id).single();
+    if (freshExam && !freshExam.is_open) {
+      if (!isAutoSubmit) toast.error('This assessment has been closed by the examiner. Your answers could not be submitted.');
+      setExamState('finished');
       return;
     }
-    const interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
-    return () => clearInterval(interval);
-  }, [examState, timeLeft]);
 
-  const submitExam = async () => {
-    if (!activeExam || !user) return;
+    if (!isAutoSubmit) {
+      const unanswered = questions.filter(q => !answers[q.id] || answers[q.id].trim() === '');
+      if (unanswered.length > 0 && !window.confirm(`You have ${unanswered.length} unanswered question(s). Submit anyway?`)) {
+        return;
+      }
+    }
 
     let mcqScore = 0;
     let totalPossible = 0;
@@ -258,7 +338,7 @@ const StudentFlow = () => {
       }
     });
 
-    await supabase.from('candidate_scripts').insert({
+    const { error } = await supabase.from('candidate_scripts').insert({
       candidate_id: user.id,
       assessment_id: activeExam.id,
       answers: answers,
@@ -271,6 +351,11 @@ const StudentFlow = () => {
       location_lat: locationCoords !== null ? locationCoords.lat : null,
       location_lng: locationCoords !== null ? locationCoords.lng : null
     });
+
+    if (error) {
+      toast.error('Failed to submit: ' + error.message);
+      return;
+    }
 
     // Clear auto-save cache upon successful submission
     const draftKey = `zibi_exam_draft_${activeExam.id}`;
@@ -298,7 +383,7 @@ const StudentFlow = () => {
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
             <header style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '2rem', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-end' }}>
               <div>
-                <h2 style={{ color: 'var(--text-ivory)', fontFamily: 'var(--font-heading)' }}>Candidate Dashboard</h2>
+                <h2 style={{ color: 'var(--text-ivory)', fontFamily: 'var(--font-heading)' }}>Student Dashboard</h2>
                 <p style={{ color: 'var(--text-muted)' }}>Welcome, {profile?.full_name} ({profile?.matriculation_number})</p>
               </div>
               <div style={{ textAlign: 'right' }}>

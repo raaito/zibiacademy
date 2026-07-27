@@ -385,7 +385,7 @@ const SuperAdminFlow = () => {
           </div>
           <div className="responsive-tabs" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             {[
-              { key: 'candidates', label: 'Candidates' },
+              { key: 'candidates', label: 'Students' },
               { key: 'staff', label: 'Staff (Lecturers/Admin)' },
               { key: 'assessments', label: 'Assessments' },
               { key: 'proctoring', label: 'Proctoring' },

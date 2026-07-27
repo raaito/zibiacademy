@@ -55,14 +55,8 @@ const RegisterFlow = () => {
       'Other': 'ZBI' 
     };
     const prefix = prefixMap[programmeApplied] || prefixMap[courseOfSelection] || 'ZBI';
-    const safeProgramme = (programmeApplied || '').replace(/["']/g, '');
-    const safeCourse = (courseOfSelection || '').replace(/["']/g, '');
-    const { count } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .or(`programme_applied.eq.${safeProgramme},course_of_selection.eq.${safeCourse}`);
-    const serial = String((count || 0) + 1).padStart(3, '0');
-    setRegMatriculation(`${prefix}-${year}-${serial}`);
+    const randomId = crypto.randomUUID().split('-')[0].toUpperCase();
+    setRegMatriculation(`${prefix}-${year}-${randomId}`);
     setMatricLoading(false);
   };
 
@@ -254,7 +248,23 @@ const RegisterFlow = () => {
                 </div>
                 <div className="input-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
                   <label>Upload Image (Passport) *</label>
-                  <input type="file" accept="image/*" required onChange={e => setAvatarFile(e.target.files[0])} />
+                  <input type="file" accept="image/png,image/jpeg,image/webp" required onChange={e => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+                      if (!validTypes.includes(file.type)) {
+                        toast.error('Only PNG, JPEG, and WebP images are allowed.');
+                        e.target.value = '';
+                        return;
+                      }
+                      if (file.size > 2 * 1024 * 1024) {
+                        toast.error('Image must be less than 2MB.');
+                        e.target.value = '';
+                        return;
+                      }
+                      setAvatarFile(file);
+                    }
+                  }} />
                 </div>
               </div>
 

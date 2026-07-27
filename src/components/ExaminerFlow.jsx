@@ -519,7 +519,7 @@ const ExaminerFlow = () => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Candidate</th>
+                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Student</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>MCQ Score</th>
                       <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Theory Score</th>
@@ -577,7 +577,7 @@ const ExaminerFlow = () => {
                 )}
                 
                 <div style={{ marginBottom: '2rem' }}>
-                  <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Candidate Answers</h4>
+                  <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Student Answers</h4>
                   {gradingQuestions.map((q, idx) => {
                     const answer = activeScript.answers[q.id];
                     const isMcq = q.q_type === 'mcq';

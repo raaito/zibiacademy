@@ -15,6 +15,8 @@ const AuthFlow = () => {
   // Login states
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [loginCooldown, setLoginCooldown] = useState(0);
 
   // Register states
   const [regFullName, setRegFullName] = useState('');
@@ -43,6 +45,7 @@ const AuthFlow = () => {
 
   const [matricLoading, setMatricLoading] = useState(false);
   const [matricHint, setMatricHint] = useState('');
+  const [regProgram, setRegProgram] = useState('multi-semester');
 
   const { user, profile, loading, error: profileError } = useAuth();
   const navigate = useNavigate();
@@ -59,14 +62,8 @@ const AuthFlow = () => {
       'Other': 'ZBI' 
     };
     const prefix = prefixMap[programmeApplied] || prefixMap[courseOfSelection] || 'ZBI';
-    const safeProgramme = (programmeApplied || '').replace(/["']/g, '');
-    const safeCourse = (courseOfSelection || '').replace(/["']/g, '');
-    const { count } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .or(`programme_applied.eq.${safeProgramme},course_of_selection.eq.${safeCourse}`);
-    const serial = String((count || 0) + 1).padStart(3, '0');
-    setRegMatriculation(`${prefix}-${year}-${serial}`);
+    const randomId = crypto.randomUUID().split('-')[0].toUpperCase();
+    setRegMatriculation(`${prefix}-${year}-${randomId}`);
     setMatricLoading(false);
   };
 
@@ -128,8 +125,19 @@ const AuthFlow = () => {
     }
   }, [user, profile, loading, profileError, navigate]);
 
+  useEffect(() => {
+    if (loginCooldown > 0) {
+      const t = setInterval(() => setLoginCooldown(c => Math.max(0, c - 1)), 1000);
+      return () => clearInterval(t);
+    }
+  }, [loginCooldown]);
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    if (loginCooldown > 0) {
+      toast.error(`Too many attempts. Wait ${loginCooldown}s before trying again.`);
+      return;
+    }
     setIsLoggingIn(true);
     setErrorMsg('');
 
@@ -139,6 +147,10 @@ const AuthFlow = () => {
     });
 
     if (error) {
+      const newCount = loginAttempts + 1;
+      setLoginAttempts(newCount);
+      const delay = Math.min(Math.pow(2, newCount) * 2, 120);
+      setLoginCooldown(delay);
       toast.error(error.message);
       setIsLoggingIn(false);
     }
@@ -164,6 +176,17 @@ const AuthFlow = () => {
       // Upload avatar if exists
       let uploadedAvatarUrl = null;
       if (avatarFile) {
+        const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+        if (!validTypes.includes(avatarFile.type)) {
+          toast.error('Only PNG, JPEG, and WebP images are allowed.');
+          setIsLoggingIn(false);
+          return;
+        }
+        if (avatarFile.size > 2 * 1024 * 1024) {
+          toast.error('Image must be less than 2MB.');
+          setIsLoggingIn(false);
+          return;
+        }
         const fileExt = avatarFile.name.split('.').pop();
         const fileName = `${data.user.id}-${Math.random()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, avatarFile);
@@ -230,7 +253,7 @@ const AuthFlow = () => {
       <div className="glass-panel login-card">
         <header className="login-header">
           <h2>Portal Access</h2>
-          <p>Authorized personnel and registered candidates only.</p>
+          <p>Authorized personnel and registered students only.</p>
         </header>
         <form className="login-form" onSubmit={handleLoginSubmit}>
           {errorMsg && (

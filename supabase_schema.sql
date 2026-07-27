@@ -111,7 +111,10 @@ CREATE TABLE public.infraction_logs (
 
 -- Profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Profiles viewable by everyone." ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Staff view all profiles" ON public.profiles FOR SELECT USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+);
 CREATE POLICY "Users insert own profile." ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Superadmins update profiles." ON public.profiles FOR UPDATE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'superadmin');
 
@@ -217,4 +220,15 @@ $$ LANGUAGE plpgsql;
 
 GRANT EXECUTE ON FUNCTION verify_staff_code(TEXT) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION redeem_staff_code(TEXT) TO anon, authenticated;
+
+-- 8. Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_questions_assessment_id ON public.questions(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_candidate_scripts_assessment_id ON public.candidate_scripts(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_candidate_scripts_candidate_id ON public.candidate_scripts(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_assessments_created_by ON public.assessments(created_by);
+CREATE INDEX IF NOT EXISTS idx_assessments_cohort_id ON public.assessments(cohort_id);
+CREATE INDEX IF NOT EXISTS idx_infraction_logs_assessment_id ON public.infraction_logs(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_infraction_logs_candidate_id ON public.infraction_logs(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_cohort_id ON public.profiles(cohort_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
