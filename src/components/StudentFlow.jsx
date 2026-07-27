@@ -401,14 +401,15 @@ const StudentFlow = () => {
                         >
                           Previous
                         </button>
-                        <button
-                          className="btn-premium primary"
-                          disabled={currentQuestionIndex === questions.length - 1}
-                          onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
-                          style={{ flex: '1 1 auto', textAlign: 'center', opacity: currentQuestionIndex === questions.length - 1 ? 0.5 : 1 }}
-                        >
-                          Next Question
-                        </button>
+                        {currentQuestionIndex < questions.length - 1 && (
+                          <button
+                            className="btn-premium primary"
+                            onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
+                            style={{ flex: '1 1 auto', textAlign: 'center' }}
+                          >
+                            Next Question
+                          </button>
+                        )}
                       </div>
                     </>
                   )}
