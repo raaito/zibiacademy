@@ -164,6 +164,7 @@ CREATE POLICY "Examiners delete scripts" ON public.candidate_scripts FOR DELETE 
 ALTER TABLE public.infraction_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Candidates insert infractions" ON public.infraction_logs FOR INSERT WITH CHECK (auth.uid() = candidate_id);
 CREATE POLICY "Examiners view infractions" ON public.infraction_logs FOR SELECT USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners delete infractions" ON public.infraction_logs FOR DELETE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
 
 -- Academic Years
 ALTER TABLE public.academic_years ENABLE ROW LEVEL SECURITY;
