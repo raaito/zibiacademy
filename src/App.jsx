@@ -20,6 +20,10 @@ const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
   const handleLogout = async () => {
+    if (profile) {
+      await supabase.from('profiles').update({ session_token: null }).eq('id', profile.id);
+    }
+    localStorage.removeItem('zibi_session_token');
     await supabase.auth.signOut();
     setIsMenuOpen(false);
     navigate('/');

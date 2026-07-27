@@ -546,10 +546,35 @@ const ExaminerFlow = () => {
 
             {activeScript && (
               <div style={{ background: 'var(--bg-surface-solid)', padding: '2rem', borderRadius: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
                   <h3 style={{ color: 'var(--accent-gold)' }}>Script Review: {activeScript.profiles?.full_name}</h3>
                   <button onClick={() => setActiveScript(null)} className="btn-premium secondary" style={{ padding: '0.4rem 0.8rem' }}>Back to List</button>
                 </div>
+
+                {(activeScript.device_info || activeScript.ip_address) && (
+                  <div style={{ marginBottom: '2rem', padding: '0.75rem', background: 'var(--bg-obsidian)', borderRadius: '4px', fontSize: '0.8rem' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                      {activeScript.ip_address && (
+                        <span><span style={{ color: 'var(--text-muted)' }}>IP:</span> <span style={{ color: 'var(--text-ivory)' }}>{activeScript.ip_address}</span></span>
+                      )}
+                      {activeScript.location_lat && activeScript.location_lng && (
+                        <span>
+                          <span style={{ color: 'var(--text-muted)' }}>Location:</span>
+                          <span style={{ color: 'var(--text-ivory)' }}>
+                            {activeScript.location_lat.toFixed(4)}, {activeScript.location_lng.toFixed(4)}
+                            <a href={`https://www.google.com/maps?q=${activeScript.location_lat},${activeScript.location_lng}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-gold)', marginLeft: '0.5rem', fontSize: '0.75rem' }}>Map</a>
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                    {activeScript.device_info && (
+                      <div style={{ marginTop: '0.4rem', wordBreak: 'break-word' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Device:</span>
+                        <span style={{ color: 'var(--text-ivory)', marginLeft: '0.5rem' }}>{activeScript.device_info}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 <div style={{ marginBottom: '2rem' }}>
                   <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Candidate Answers</h4>

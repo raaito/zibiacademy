@@ -11,9 +11,9 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
-    // Fetch initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -24,7 +24,6 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -46,7 +45,7 @@ export const AuthProvider = ({ children }) => {
         .from('profiles')
         .select('*')
         .eq('id', userId);
-      
+
       if (error) {
         console.error("Error fetching profile:", error);
         setError(error.message);
@@ -54,10 +53,41 @@ export const AuthProvider = ({ children }) => {
         setError(`No profile found for UID: ${userId.substring(0, 8)}... Please verify your database records.`);
       } else if (data.length > 1) {
         console.warn("Multiple profiles found for user:", userId);
-        setProfile(data[0]); // Fallback to first one
+        setProfile(data[0]);
         setError(null);
       } else {
-        setProfile(data[0]);
+        const prof = data[0];
+
+        if (prof.role === 'candidate' && !signingOut) {
+          const localToken = localStorage.getItem('zibi_session_token');
+
+          if (prof.session_token && prof.session_token !== localToken) {
+            if (!localToken) {
+              localStorage.setItem('zibi_session_token', prof.session_token);
+            } else {
+              setSigningOut(true);
+              await supabase.auth.signOut();
+              localStorage.removeItem('zibi_session_token');
+              //setError('This account is already logged in from another device. Only one active session is allowed.');
+              setError('Unable to log in.');
+              setProfile(null);
+              setUser(null);
+              setSession(null);
+              setSigningOut(false);
+              setLoading(false);
+              return;
+            }
+          }
+
+          if (!prof.session_token) {
+            const newToken = crypto.randomUUID();
+            await supabase.from('profiles').update({ session_token: newToken }).eq('id', prof.id);
+            localStorage.setItem('zibi_session_token', newToken);
+            prof.session_token = newToken;
+          }
+        }
+
+        setProfile(prof);
         setError(null);
       }
     } catch (err) {

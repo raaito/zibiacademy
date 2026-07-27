@@ -42,6 +42,7 @@ CREATE TYPE user_role AS ENUM ('superadmin', 'examiner', 'candidate');
     course_of_selection TEXT,
     registration_type TEXT,
     staff_code TEXT UNIQUE,
+    session_token TEXT DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -88,6 +89,10 @@ CREATE TABLE public.candidate_scripts (
     question_scores JSONB DEFAULT '{}'::jsonb, -- Per-question scores {question_id: score}
     is_graded BOOLEAN DEFAULT false,
     submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    device_info TEXT DEFAULT '', -- Browser/device info (user agent, platform, screen)
+    ip_address TEXT DEFAULT '', -- Public IP address at time of exam
+    location_lat DOUBLE PRECISION, -- Geolocation latitude
+    location_lng DOUBLE PRECISION, -- Geolocation longitude
     UNIQUE(candidate_id, assessment_id) -- A candidate can submit only once
 );
 

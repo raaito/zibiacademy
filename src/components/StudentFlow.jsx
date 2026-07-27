@@ -17,6 +17,11 @@ const StudentFlow = () => {
   const [answers, setAnswers] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
 
+  // Device / Proctoring metadata captured at exam start
+  const [deviceInfo, setDeviceInfo] = useState('');
+  const [ipAddress, setIpAddress] = useState('');
+  const [locationCoords, setLocationCoords] = useState(null);
+
   useEffect(() => {
     if (user && profile && examState === 'dashboard') {
       fetchAssessments();
@@ -63,8 +68,30 @@ const StudentFlow = () => {
     localStorage.setItem(draftKey, JSON.stringify(draftData));
   };
 
+  const captureDeviceInfo = () => {
+    const ua = navigator.userAgent;
+    const platform = navigator.platform || 'unknown';
+    const screen = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+    const lang = navigator.language || 'unknown';
+    setDeviceInfo(`UA: ${ua} | Platform: ${platform} | Screen: ${screen} | Lang: ${lang}`);
+
+    fetch('https://api.ipify.org?format=json')
+      .then(r => r.json())
+      .then(d => { if (d.ip) setIpAddress(d.ip); })
+      .catch(() => {});
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => setLocationCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { timeout: 5000 }
+      );
+    }
+  };
+
   const startExam = async (exam) => {
     setActiveExam(exam);
+    captureDeviceInfo();
 
     // Fetch questions
     const { data } = await supabase.from('questions')
@@ -114,11 +141,15 @@ const StudentFlow = () => {
 
   const logInfraction = async (type, details) => {
     if (!activeExam || !user) return;
+    const qNum = currentQuestionIndex + 1;
+    const totalQs = questions.length;
+    const timeRemaining = formatTime(timeLeft);
+    const enriched = `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
     await supabase.from('infraction_logs').insert({
       candidate_id: user.id,
       assessment_id: activeExam.id,
       infraction_type: type,
-      details: details
+      details: enriched
     });
   };
 
@@ -126,12 +157,25 @@ const StudentFlow = () => {
   useEffect(() => {
     if (examState !== 'taking_exam') return;
 
+    let hiddenSince = null;
+
     const handleVisibility = () => {
-      if (document.hidden) logInfraction('visibilitychange', 'App Switched / Tab Hidden');
+      if (document.hidden) {
+        hiddenSince = Date.now();
+        logInfraction('visibilitychange', 'Tab hidden / app switched');
+      } else if (hiddenSince) {
+        const durationSec = Math.round((Date.now() - hiddenSince) / 1000);
+        logInfraction('visibilitychange', `Tab returned after ${durationSec}s away`);
+        hiddenSince = null;
+      }
     };
 
     const handleBlur = () => {
-      logInfraction('blur', 'Browser window lost focus');
+      logInfraction('blur', 'Window lost focus');
+    };
+
+    const handleFocus = () => {
+      logInfraction('blur', 'Window regained focus');
     };
 
     const preventCopyPaste = (e) => {
@@ -144,6 +188,13 @@ const StudentFlow = () => {
       logInfraction('contextmenu', 'Context menu blocked');
     };
 
+    // Fullscreen enforcement
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        logInfraction('fullscreen', 'Exited fullscreen mode');
+      }
+    };
+
     // Accidental Exit Prevention
     const handleBeforeUnload = (e) => {
       e.preventDefault();
@@ -152,10 +203,12 @@ const StudentFlow = () => {
 
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
     document.addEventListener("copy", preventCopyPaste);
     document.addEventListener("paste", preventCopyPaste);
     document.addEventListener("cut", preventCopyPaste);
     document.addEventListener("contextmenu", preventContextMenu);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     // Anti-selection
@@ -165,15 +218,17 @@ const StudentFlow = () => {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("copy", preventCopyPaste);
       document.removeEventListener("paste", preventCopyPaste);
       document.removeEventListener("cut", preventCopyPaste);
       document.removeEventListener("contextmenu", preventContextMenu);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.body.style.userSelect = 'auto';
       document.body.style.webkitUserSelect = 'auto';
     };
-  }, [examState, activeExam]);
+  }, [examState, activeExam, currentQuestionIndex, questions.length, timeLeft]);
 
   // Timer
   useEffect(() => {
@@ -210,7 +265,11 @@ const StudentFlow = () => {
       auto_mcq_score: mcqScore,
       total_possible_score: totalPossible,
       question_scores: questionScores,
-      is_graded: false
+      is_graded: false,
+      device_info: deviceInfo,
+      ip_address: ipAddress,
+      location_lat: locationCoords !== null ? locationCoords.lat : null,
+      location_lng: locationCoords !== null ? locationCoords.lng : null
     });
 
     // Clear auto-save cache upon successful submission
