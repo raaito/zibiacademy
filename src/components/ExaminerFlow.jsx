@@ -132,7 +132,9 @@ const ExaminerFlow = () => {
   };
 
   const deleteAssessment = async (id) => {
-    if (!window.confirm('Delete this assessment and all its questions? This cannot be undone.')) return;
+    if (!window.confirm('Delete this assessment, all its questions, and candidate submissions? This cannot be undone.')) return;
+    await supabase.from('candidate_scripts').delete().eq('assessment_id', id);
+    await supabase.from('questions').delete().eq('assessment_id', id);
     const { error } = await supabase.from('assessments').delete().eq('id', id);
     if (error) return toast.error(error.message);
     setAssessments(assessments.filter(a => a.id !== id));
