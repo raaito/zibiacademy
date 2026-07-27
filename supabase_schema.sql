@@ -158,6 +158,7 @@ CREATE POLICY "Candidates manage own scripts" ON public.candidate_scripts FOR IN
 CREATE POLICY "Candidates view own scripts" ON public.candidate_scripts FOR SELECT USING (auth.uid() = candidate_id);
 CREATE POLICY "Examiners view all scripts" ON public.candidate_scripts FOR SELECT USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
 CREATE POLICY "Examiners rate scripts" ON public.candidate_scripts FOR UPDATE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners delete scripts" ON public.candidate_scripts FOR DELETE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
 
 -- Infraction Logs
 ALTER TABLE public.infraction_logs ENABLE ROW LEVEL SECURITY;
