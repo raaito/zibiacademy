@@ -1,0 +1,412 @@
+Time	Candidate	Assessment	Type	Details
+8/3/2026, 7:21:51 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 8:25 remaining] Window regained focus
+8/3/2026, 7:21:51 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q4/5 | 8:26 remaining] Tab hidden / app switched
+8/3/2026, 7:21:51 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 8:27 remaining] Window lost focus
+8/3/2026, 7:19:41 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q4/5 | 10:53 remaining] Context menu blocked
+8/3/2026, 7:15:16 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 1:14 remaining] Window regained focus
+8/3/2026, 7:15:16 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 1:14 remaining] Window lost focus
+8/3/2026, 7:15:12 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 1:16 remaining] Window regained focus
+8/3/2026, 7:15:11 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 1:16 remaining] Window lost focus
+8/3/2026, 7:07:03 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 1:03 remaining] Window regained focus
+8/3/2026, 7:07:03 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 1:04 remaining] Window lost focus
+8/3/2026, 7:05:34 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 0:47 remaining] Window regained focus
+8/3/2026, 7:05:34 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 0:47 remaining] Window lost focus
+8/3/2026, 7:05:31 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 0:51 remaining] Window lost focus
+8/3/2026, 7:05:31 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 0:51 remaining] Window regained focus
+8/3/2026, 7:04:51 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 11:34 remaining] Window regained focus
+8/3/2026, 7:04:46 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 3:08 remaining] Window regained focus
+8/3/2026, 7:04:33 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 3:25 remaining] Window lost focus
+8/3/2026, 7:03:19 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 13:07 remaining] Window lost focus
+8/3/2026, 7:01:49 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 14:36 remaining] Window regained focus
+8/3/2026, 7:01:33 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 14:52 remaining] Window lost focus
+8/3/2026, 7:01:26 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 6:20 remaining] Window lost focus
+8/3/2026, 7:01:19 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 6:36 remaining] Window regained focus
+8/3/2026, 7:01:17 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 6:37 remaining] Window lost focus
+8/3/2026, 7:01:07 PM	Rebecca Adeyanju(ZS-2026-007)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 5:21 remaining] Window lost focus
+8/3/2026, 6:59:52 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 10:44 remaining] Window lost focus
+8/3/2026, 6:59:47 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 6:37 remaining] Window regained focus
+8/3/2026, 6:59:43 PM	Elizabeth Modupe George	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 5:56 remaining] Window regained focus
+8/3/2026, 6:58:31 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 31:45 remaining] Window regained focus
+8/3/2026, 6:58:31 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 31:46 remaining] Tab returned after 1s away
+8/3/2026, 6:58:28 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 31:46 remaining] Tab hidden / app switched
+8/3/2026, 6:58:28 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 31:47 remaining] Window lost focus
+8/3/2026, 6:58:28 PM	Elizabeth Modupe George	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 7:12 remaining] Window lost focus
+8/3/2026, 6:58:28 PM	Elizabeth Modupe George	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 7:12 remaining] Tab hidden / app switched
+8/3/2026, 6:57:58 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 9:56 remaining] Window regained focus
+8/3/2026, 6:57:57 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 10:06 remaining] Window lost focus
+8/3/2026, 6:57:56 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 8:25 remaining] Window lost focus
+8/3/2026, 6:57:56 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q3/5 | 8:25 remaining] Tab hidden / app switched
+8/3/2026, 6:57:11 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 13:21 remaining] Tab hidden / app switched
+8/3/2026, 6:56:47 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 11:32 remaining] Window lost focus
+8/3/2026, 6:56:31 PM	Rachael Aisha Akingbehin (ZS-2026-08314159)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 9:46 remaining] Window lost focus
+8/3/2026, 6:56:20 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 14:12 remaining] Tab hidden / app switched
+8/3/2026, 6:56:20 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 14:13 remaining] Window lost focus
+8/3/2026, 6:55:56 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 11:59 remaining] Window regained focus
+8/3/2026, 6:55:47 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 12:19 remaining] Window lost focus
+8/3/2026, 6:55:16 PM	OLOLADE OSEMONU AYENI (ZS-2026-005)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q5/5 | 21:24 remaining] Context menu blocked
+8/3/2026, 6:54:01 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 13:54 remaining] Window regained focus
+8/3/2026, 6:53:31 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 14:35 remaining] Window lost focus
+8/3/2026, 6:52:24 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 18:09 remaining] Tab hidden / app switched
+8/3/2026, 6:51:58 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 15:57 remaining] Window regained focus
+8/3/2026, 6:51:51 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 16:03 remaining] Window lost focus
+8/3/2026, 6:51:27 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 14:53 remaining] Window lost focus
+8/3/2026, 6:51:27 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q3/5 | 14:53 remaining] Tab hidden / app switched
+8/3/2026, 6:51:23 PM	Moses ogoroh (ZS-2026-003)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 14:50 remaining] Window lost focus
+8/3/2026, 6:50:51 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 19:41 remaining] Tab hidden / app switched
+8/3/2026, 6:50:51 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 19:43 remaining] Window lost focus
+8/3/2026, 6:49:58 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q3/5 | 16:22 remaining] Context menu blocked
+8/3/2026, 6:49:47 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 16:37 remaining] Window regained focus
+8/3/2026, 6:48:39 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 41:37 remaining] Window regained focus
+8/3/2026, 6:48:27 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 17:54 remaining] Tab hidden / app switched
+8/3/2026, 6:48:27 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 17:54 remaining] Window lost focus
+8/3/2026, 6:48:01 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 42:14 remaining] Tab hidden / app switched
+8/3/2026, 6:48:01 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 42:14 remaining] Window lost focus
+8/3/2026, 6:46:48 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 43:29 remaining] Window regained focus
+8/3/2026, 6:46:46 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 43:31 remaining] Tab hidden / app switched
+8/3/2026, 6:46:46 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 43:32 remaining] Window lost focus
+8/3/2026, 6:46:29 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 21:25 remaining] Window regained focus
+8/3/2026, 6:46:24 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 21:30 remaining] Window lost focus
+8/3/2026, 6:43:50 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 23:53 remaining] Tab hidden / app switched
+8/3/2026, 6:43:50 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 23:56 remaining] Tab hidden / app switched
+8/3/2026, 6:43:46 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 23:57 remaining] Window lost focus
+8/3/2026, 6:43:06 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 24:48 remaining] Window regained focus
+8/3/2026, 6:42:51 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 25:04 remaining] Window lost focus
+8/3/2026, 6:41:34 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 26:43 remaining] Window regained focus
+8/3/2026, 6:41:31 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 26:47 remaining] Window lost focus
+8/3/2026, 6:40:57 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 27:49 remaining] Window lost focus
+8/3/2026, 6:39:23 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 28:31 remaining] Window regained focus
+8/3/2026, 6:39:15 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 28:39 remaining] Window lost focus
+8/3/2026, 6:38:45 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 28:58 remaining] Window regained focus
+8/3/2026, 6:38:43 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 29:00 remaining] Window lost focus
+8/3/2026, 6:38:04 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 29:50 remaining] Window regained focus
+8/3/2026, 6:38:02 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 29:53 remaining] Window lost focus
+8/3/2026, 6:37:18 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 30:35 remaining] Tab hidden / app switched
+8/3/2026, 6:37:12 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 30:33 remaining] Window regained focus
+8/3/2026, 6:37:12 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 30:36 remaining] Window lost focus
+8/3/2026, 6:37:06 PM	Moses ogoroh (ZS-2026-003)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 29:03 remaining] Window regained focus
+8/3/2026, 6:37:01 PM	Moses ogoroh (ZS-2026-003)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 29:14 remaining] Window lost focus
+8/3/2026, 6:36:27 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 29:54 remaining] Window regained focus
+8/3/2026, 6:36:25 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 29:56 remaining] Window lost focus
+8/3/2026, 6:36:25 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 29:55 remaining] Tab hidden / app switched
+8/3/2026, 6:36:05 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 40:21 remaining] Window regained focus
+8/3/2026, 6:35:45 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 30:35 remaining] Window regained focus
+8/3/2026, 6:35:19 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 41:06 remaining] Window lost focus
+8/3/2026, 6:35:16 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 41:10 remaining] Window regained focus
+8/3/2026, 6:35:12 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 31:07 remaining] Window lost focus
+8/3/2026, 6:35:12 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 31:07 remaining] Tab hidden / app switched
+8/3/2026, 6:35:12 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 41:14 remaining] Window lost focus
+8/3/2026, 6:35:10 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 41:16 remaining] Window regained focus
+8/3/2026, 6:34:52 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 31:21 remaining] Window lost focus
+8/3/2026, 6:34:02 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 42:24 remaining] Window lost focus
+8/3/2026, 6:33:56 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 35:21 remaining] Window lost focus
+8/3/2026, 6:33:56 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 34:51 remaining] Window regained focus
+8/3/2026, 6:33:56 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 34:50 remaining] Window lost focus
+8/3/2026, 6:33:56 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q5/5 | 35:18 remaining] Tab hidden / app switched
+8/3/2026, 6:27:44 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 40:10 remaining] Window regained focus
+8/3/2026, 6:27:44 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 40:19 remaining] Window regained focus
+8/3/2026, 6:27:43 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 40:22 remaining] Window lost focus
+8/3/2026, 6:27:43 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q4/5 | 40:13 remaining] Window lost focus
+8/3/2026, 6:27:27 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 38:43 remaining] Window regained focus
+8/3/2026, 6:27:11 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 38:59 remaining] Window lost focus
+8/3/2026, 6:27:11 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q5/5 | 38:59 remaining] Tab hidden / app switched
+8/3/2026, 6:24:44 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 43:11 remaining] Window regained focus
+8/3/2026, 6:24:43 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 43:11 remaining] Window lost focus
+8/3/2026, 6:24:20 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 43:34 remaining] Window regained focus
+8/3/2026, 6:24:16 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 43:39 remaining] Window lost focus
+8/3/2026, 6:23:35 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 52:51 remaining] Window regained focus
+8/3/2026, 6:22:29 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 53:57 remaining] Window lost focus
+8/3/2026, 6:22:21 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q1/5 | 54:05 remaining] Context menu blocked
+8/3/2026, 6:22:18 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	copy_paste	[Q1/5 | 54:07 remaining] Clipboard action attempted: paste
+8/3/2026, 6:22:11 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 54:15 remaining] Window regained focus
+8/3/2026, 6:22:01 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 54:25 remaining] Window lost focus
+8/3/2026, 6:21:51 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q5/5 | 44:29 remaining] Context menu blocked
+8/3/2026, 6:21:06 PM	OLOLADE OSEMONU AYENI (ZS-2026-005)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q3/5 | 55:34 remaining] Context menu blocked
+8/3/2026, 6:18:52 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 57:34 remaining] Window regained focus
+8/3/2026, 6:18:17 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q3/5 | 58:09 remaining] Window lost focus
+8/3/2026, 6:18:02 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 58:24 remaining] Window regained focus
+8/3/2026, 6:17:09 PM	Sunday Adacha(ZS-2026-6F4F9C46)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 59:17 remaining] Window lost focus
+8/3/2026, 6:16:52 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 51:03 remaining] Window regained focus
+8/3/2026, 6:16:49 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 51:06 remaining] Window lost focus
+8/3/2026, 6:16:22 PM	Rachael Aisha Akingbehin (ZS-2026-08314159)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q1/5 | 49:49 remaining] Context menu blocked
+8/3/2026, 6:15:54 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 51:56 remaining] Tab hidden / app switched
+8/3/2026, 6:15:48 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 51:56 remaining] Window lost focus
+8/3/2026, 6:15:48 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 51:55 remaining] Window regained focus
+8/3/2026, 6:15:48 PM	Sunday Peter (ZS-2026-002)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 51:56 remaining] Tab returned after 1s away
+8/3/2026, 6:14:21 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 51:51 remaining] Window regained focus
+8/3/2026, 6:14:07 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 52:04 remaining] Tab hidden / app switched
+8/3/2026, 6:14:07 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 52:04 remaining] Window lost focus
+8/3/2026, 6:13:14 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	contextmenu	[Q5/5 | 53:06 remaining] Context menu blocked
+8/3/2026, 6:11:11 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 57:07 remaining] Window regained focus
+8/3/2026, 6:10:50 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 57:04 remaining] Window regained focus
+8/3/2026, 6:10:49 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 57:14 remaining] Window lost focus
+8/3/2026, 6:10:24 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 57:54 remaining] Window lost focus
+8/3/2026, 6:10:24 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 57:53 remaining] Tab hidden / app switched
+8/3/2026, 6:10:10 PM	OLOLADE OSEMONU AYENI (ZS-2026-005)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 5:05 remaining] Window lost focus
+8/3/2026, 6:09:01 PM	OLOLADE OSEMONU AYENI (ZS-2026-005)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q2/4 | 6:03 remaining] Context menu blocked
+8/3/2026, 6:08:27 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 59:40 remaining] Window regained focus
+8/3/2026, 6:08:27 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 59:40 remaining] Window regained focus
+8/3/2026, 6:08:23 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 59:55 remaining] Window regained focus
+8/3/2026, 6:08:18 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 58:00 remaining] Window regained focus
+8/3/2026, 6:08:18 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 60:00 remaining] Window lost focus
+8/3/2026, 6:08:13 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q2/5 | 59:41 remaining] Tab hidden / app switched
+8/3/2026, 6:08:13 PM	Oludara Okelola(ZS-2026-4A331962)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q2/5 | 59:41 remaining] Window lost focus
+8/3/2026, 6:08:05 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 58:06 remaining] Tab hidden / app switched
+8/3/2026, 6:08:05 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 58:06 remaining] Window lost focus
+8/3/2026, 6:07:31 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 58:48 remaining] Window regained focus
+8/3/2026, 6:07:30 PM	Anslem Diayi(ZS-2026-004)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q5/5 | 58:49 remaining] Window lost focus
+8/3/2026, 6:07:11 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 59:02 remaining] Window regained focus
+8/3/2026, 6:06:55 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	visibilitychange	[Q1/5 | 59:18 remaining] Tab hidden / app switched
+8/3/2026, 6:06:55 PM	Musa sani senchi(ZS-2026-012)	EMU - EVANGELISM AND MULTI-MEDIA UTILIZATION	blur	[Q1/5 | 59:18 remaining] Window lost focus
+8/3/2026, 6:03:34 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 0:01 remaining] Window lost focus
+8/3/2026, 6:03:34 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 0:01 remaining] Window regained focus
+8/3/2026, 6:03:30 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 0:03 remaining] Window regained focus
+8/3/2026, 6:03:30 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 0:03 remaining] Window lost focus
+8/3/2026, 6:03:14 PM	OLOLADE OSEMONU AYENI (ZS-2026-005)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q2/4 | 11:50 remaining] Context menu blocked
+8/3/2026, 6:02:30 PM	OLOLADE OSEMONU AYENI (ZS-2026-005)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q2/4 | 12:33 remaining] Context menu blocked
+8/3/2026, 6:01:13 PM	Sunday Peter (ZS-2026-002)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 18:39 remaining] Window lost focus
+8/3/2026, 6:00:33 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 2:58 remaining] Window regained focus
+8/3/2026, 6:00:13 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 0:20 remaining] Window regained focus
+8/3/2026, 6:00:13 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 0:20 remaining] Window lost focus
+8/3/2026, 6:00:07 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 0:20 remaining] Window regained focus
+8/3/2026, 6:00:07 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 0:20 remaining] Window lost focus
+8/3/2026, 6:00:07 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 0:20 remaining] Window regained focus
+8/3/2026, 5:59:59 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 0:34 remaining] Window regained focus
+8/3/2026, 5:59:59 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 0:34 remaining] Window lost focus
+8/3/2026, 5:59:52 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 0:34 remaining] Window lost focus
+8/3/2026, 5:59:50 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 0:43 remaining] Window regained focus
+8/3/2026, 5:59:50 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 0:43 remaining] Window lost focus
+8/3/2026, 5:59:45 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 3:46 remaining] Window lost focus
+8/3/2026, 5:59:33 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q4/4 | 5:01 remaining] Context menu blocked
+8/3/2026, 5:59:33 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q4/4 | 4:58 remaining] Context menu blocked
+8/3/2026, 5:59:33 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q4/4 | 5:00 remaining] Context menu blocked
+8/3/2026, 5:59:33 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q4/4 | 4:59 remaining] Context menu blocked
+8/3/2026, 5:59:23 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 1:07 remaining] Window regained focus
+8/3/2026, 5:59:23 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 1:07 remaining] Window lost focus
+8/3/2026, 5:58:56 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 1:40 remaining] Window regained focus
+8/3/2026, 5:57:57 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q2/4 | 2:29 remaining] Context menu blocked
+8/3/2026, 5:57:36 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 2:51 remaining] Window lost focus
+8/3/2026, 5:57:28 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 36:09 remaining] Window regained focus
+8/3/2026, 5:57:26 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q3/4 | 36:10 remaining] Tab hidden / app switched
+8/3/2026, 5:57:26 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 36:11 remaining] Window lost focus
+8/3/2026, 5:56:41 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 6:27 remaining] Window lost focus
+8/3/2026, 5:55:23 PM	Rebecca Adeyanju(ZS-2026-007)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 7:39 remaining] Window lost focus
+8/3/2026, 5:53:49 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 6:08 remaining] Window lost focus
+8/3/2026, 5:53:20 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 10:12 remaining] Window regained focus
+8/3/2026, 5:51:51 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 8:36 remaining] Window regained focus
+8/3/2026, 5:51:47 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 8:40 remaining] Window lost focus
+8/3/2026, 5:51:40 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 8:46 remaining] Window regained focus
+8/3/2026, 5:51:37 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 11:54 remaining] Window lost focus
+8/3/2026, 5:51:28 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 8:58 remaining] Window lost focus
+8/3/2026, 5:50:57 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 9:29 remaining] Window regained focus
+8/3/2026, 5:50:50 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 12:42 remaining] Window regained focus
+8/3/2026, 5:50:44 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 9:42 remaining] Window lost focus
+8/3/2026, 5:50:00 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 10:27 remaining] Window regained focus
+8/3/2026, 5:49:59 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 10:28 remaining] Window lost focus
+8/3/2026, 5:49:51 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 10:35 remaining] Window regained focus
+8/3/2026, 5:49:50 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 10:36 remaining] Window lost focus
+8/3/2026, 5:49:30 PM	Rachael Aisha Akingbehin (ZS-2026-08314159)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 14:13 remaining] Window lost focus
+8/3/2026, 5:49:30 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 10:57 remaining] Window regained focus
+8/3/2026, 5:49:28 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 10:59 remaining] Window lost focus
+8/3/2026, 5:49:16 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 11:11 remaining] Window regained focus
+8/3/2026, 5:49:10 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 11:17 remaining] Window lost focus
+8/3/2026, 5:49:07 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 11:19 remaining] Window regained focus
+8/3/2026, 5:49:06 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 11:20 remaining] Window lost focus
+8/3/2026, 5:48:48 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 11:38 remaining] Window regained focus
+8/3/2026, 5:48:43 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 11:57 remaining] Window lost focus
+8/3/2026, 5:48:25 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 15:07 remaining] Window lost focus
+8/3/2026, 5:48:18 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 15:14 remaining] Window regained focus
+8/3/2026, 5:46:55 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 16:36 remaining] Window lost focus
+8/3/2026, 5:46:26 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 14:00 remaining] Window regained focus
+8/3/2026, 5:46:23 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 14:05 remaining] Window regained focus
+8/3/2026, 5:46:08 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 14:25 remaining] Window lost focus
+8/3/2026, 5:46:07 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 14:20 remaining] Tab hidden / app switched
+8/3/2026, 5:46:07 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 14:20 remaining] Window lost focus
+8/3/2026, 5:45:45 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 14:42 remaining] Window regained focus
+8/3/2026, 5:45:41 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 14:46 remaining] Window lost focus
+8/3/2026, 5:45:41 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 14:46 remaining] Tab hidden / app switched
+8/3/2026, 5:45:16 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 48:21 remaining] Window regained focus
+8/3/2026, 5:45:13 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q3/4 | 48:22 remaining] Tab hidden / app switched
+8/3/2026, 5:45:13 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 48:23 remaining] Window lost focus
+8/3/2026, 5:44:51 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 15:46 remaining] Window lost focus
+8/3/2026, 5:44:50 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 15:44 remaining] Window regained focus
+8/3/2026, 5:44:43 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 15:44 remaining] Window regained focus
+8/3/2026, 5:44:01 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 16:26 remaining] Window lost focus
+8/3/2026, 5:44:01 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 16:26 remaining] Tab hidden / app switched
+8/3/2026, 5:43:06 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 17:20 remaining] Window regained focus
+8/3/2026, 5:43:05 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 17:22 remaining] Window lost focus
+8/3/2026, 5:42:54 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 17:33 remaining] Window regained focus
+8/3/2026, 5:42:47 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 17:40 remaining] Tab hidden / app switched
+8/3/2026, 5:42:47 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 17:40 remaining] Window lost focus
+8/3/2026, 5:42:07 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 18:21 remaining] Window regained focus
+8/3/2026, 5:41:43 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 18:44 remaining] Window lost focus
+8/3/2026, 5:41:43 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 18:44 remaining] Tab hidden / app switched
+8/3/2026, 5:41:27 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 19:00 remaining] Window regained focus
+8/3/2026, 5:41:14 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 19:13 remaining] Window lost focus
+8/3/2026, 5:41:02 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 19:25 remaining] Window regained focus
+8/3/2026, 5:40:56 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 19:31 remaining] Window lost focus
+8/3/2026, 5:40:56 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 19:31 remaining] Tab hidden / app switched
+8/3/2026, 5:40:13 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 20:55 remaining] Window regained focus
+8/3/2026, 5:40:13 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 20:56 remaining] Window lost focus
+8/3/2026, 5:39:27 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 20:59 remaining] Window regained focus
+8/3/2026, 5:39:19 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 54:17 remaining] Window regained focus
+8/3/2026, 5:39:13 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 21:13 remaining] Window lost focus
+8/3/2026, 5:39:13 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 21:13 remaining] Tab hidden / app switched
+8/3/2026, 5:39:10 PM	Rachael Aisha Akingbehin (ZS-2026-08314159)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q3/4 | 24:28 remaining] Context menu blocked
+8/3/2026, 5:38:51 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 54:44 remaining] Window lost focus
+8/3/2026, 5:38:51 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 54:44 remaining] Tab hidden / app switched
+8/3/2026, 5:38:48 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 23:05 remaining] Window regained focus
+8/3/2026, 5:38:18 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 22:08 remaining] Window regained focus
+8/3/2026, 5:37:50 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 55:45 remaining] Window regained focus
+8/3/2026, 5:37:47 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 24:07 remaining] Window lost focus
+8/3/2026, 5:37:47 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 24:06 remaining] Tab hidden / app switched
+8/3/2026, 5:37:44 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 55:51 remaining] Tab hidden / app switched
+8/3/2026, 5:37:44 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 55:51 remaining] Window lost focus
+8/3/2026, 5:37:27 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 22:23 remaining] Tab hidden / app switched
+8/3/2026, 5:37:25 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 23:02 remaining] Tab hidden / app switched
+8/3/2026, 5:37:25 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 23:02 remaining] Window lost focus
+8/3/2026, 5:37:20 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 56:15 remaining] Window regained focus
+8/3/2026, 5:37:17 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 22:34 remaining] Tab hidden / app switched
+8/3/2026, 5:37:16 PM	Bege Yariok Yakubu (ZS-2026-976E540C)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 22:36 remaining] Window lost focus
+8/3/2026, 5:36:57 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 23:32 remaining] Window regained focus
+8/3/2026, 5:36:18 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 57:17 remaining] Window lost focus
+8/3/2026, 5:36:18 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 57:17 remaining] Tab hidden / app switched
+8/3/2026, 5:36:09 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 24:17 remaining] Window lost focus
+8/3/2026, 5:36:09 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q3/4 | 24:17 remaining] Tab hidden / app switched
+8/3/2026, 5:36:09 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q2/4 | 57:26 remaining] Context menu blocked
+8/3/2026, 5:36:08 PM	Ige Modupe Toluwanimi (ZR-2026-7BF62470)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q2/4 | 57:28 remaining] Context menu blocked
+8/3/2026, 5:35:41 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 25:03 remaining] Window regained focus
+8/3/2026, 5:34:24 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 26:02 remaining] Window lost focus
+8/3/2026, 5:34:24 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 26:02 remaining] Tab hidden / app switched
+8/3/2026, 5:33:31 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 30:01 remaining] Window regained focus
+8/3/2026, 5:33:26 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 27:01 remaining] Window regained focus
+8/3/2026, 5:33:25 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 27:02 remaining] Window lost focus
+8/3/2026, 5:32:23 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 28:32 remaining] Window lost focus
+8/3/2026, 5:31:58 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 31:35 remaining] Window lost focus
+8/3/2026, 5:31:21 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 32:32 remaining] Window lost focus
+8/3/2026, 5:30:39 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 33:13 remaining] Window regained focus
+8/3/2026, 5:30:05 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 31:48 remaining] Window regained focus
+8/3/2026, 5:30:02 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 31:51 remaining] Tab hidden / app switched
+8/3/2026, 5:30:02 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 31:51 remaining] Window lost focus
+8/3/2026, 5:29:22 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q4/4 | 34:29 remaining] Tab hidden / app switched
+8/3/2026, 5:29:20 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 34:31 remaining] Window lost focus
+8/3/2026, 5:29:17 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 32:37 remaining] Window regained focus
+8/3/2026, 5:29:16 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q4/4 | 34:35 remaining] Context menu blocked
+8/3/2026, 5:29:15 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 32:38 remaining] Window lost focus
+8/3/2026, 5:29:15 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 32:38 remaining] Tab hidden / app switched
+8/3/2026, 5:29:14 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q4/4 | 34:36 remaining] Context menu blocked
+8/3/2026, 5:29:13 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q4/4 | 34:38 remaining] Context menu blocked
+8/3/2026, 5:29:06 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 31:20 remaining] Window regained focus
+8/3/2026, 5:29:05 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 31:22 remaining] Window lost focus
+8/3/2026, 5:27:58 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 32:28 remaining] Window regained focus
+8/3/2026, 5:27:51 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 34:03 remaining] Window regained focus
+8/3/2026, 5:27:41 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 32:45 remaining] Window lost focus
+8/3/2026, 5:27:24 PM	Sunday Peter (ZS-2026-002)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 52:27 remaining] Tab hidden / app switched
+8/3/2026, 5:27:24 PM	Sunday Peter (ZS-2026-002)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 52:28 remaining] Window lost focus
+8/3/2026, 5:27:24 PM	Sunday Peter (ZS-2026-002)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 52:26 remaining] Window regained focus
+8/3/2026, 5:27:24 PM	Sunday Peter (ZS-2026-002)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 52:27 remaining] Tab returned after 1s away
+8/3/2026, 5:26:44 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 36:48 remaining] Window regained focus
+8/3/2026, 5:26:43 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 33:42 remaining] Window regained focus
+8/3/2026, 5:26:40 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 35:15 remaining] Window lost focus
+8/3/2026, 5:26:40 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q3/4 | 35:14 remaining] Tab hidden / app switched
+8/3/2026, 5:26:35 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 36:57 remaining] Window lost focus
+8/3/2026, 5:26:22 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 34:03 remaining] Window regained focus
+8/3/2026, 5:26:18 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 34:08 remaining] Tab hidden / app switched
+8/3/2026, 5:26:18 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 34:08 remaining] Window lost focus
+8/3/2026, 5:26:16 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 34:10 remaining] Window lost focus
+8/3/2026, 5:26:06 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 36:57 remaining] Window regained focus
+8/3/2026, 5:26:03 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 37:30 remaining] Window regained focus
+8/3/2026, 5:25:40 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 34:46 remaining] Window regained focus
+8/3/2026, 5:25:40 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 34:48 remaining] Window lost focus
+8/3/2026, 5:25:29 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 37:34 remaining] Tab hidden / app switched
+8/3/2026, 5:25:29 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 37:34 remaining] Window lost focus
+8/3/2026, 5:24:32 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 35:53 remaining] Window regained focus
+8/3/2026, 5:24:29 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:03 remaining] Window lost focus
+8/3/2026, 5:24:22 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 36:04 remaining] Tab hidden / app switched
+8/3/2026, 5:24:22 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 36:04 remaining] Window lost focus
+8/3/2026, 5:24:02 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 40:30 remaining] Context menu blocked
+8/3/2026, 5:23:59 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 39:52 remaining] Window regained focus
+8/3/2026, 5:23:59 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 39:52 remaining] Window lost focus
+8/3/2026, 5:23:59 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 39:53 remaining] Window lost focus
+8/3/2026, 5:23:59 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 39:52 remaining] Window regained focus
+8/3/2026, 5:23:41 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 40:14 remaining] Window regained focus
+8/3/2026, 5:23:41 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 40:17 remaining] Window lost focus
+8/3/2026, 5:23:34 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 37:03 remaining] Window lost focus
+8/3/2026, 5:23:34 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 36:58 remaining] Window regained focus
+8/3/2026, 5:21:21 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:06 remaining] Window regained focus
+8/3/2026, 5:21:17 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:09 remaining] Window lost focus
+8/3/2026, 5:21:12 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:15 remaining] Window regained focus
+8/3/2026, 5:21:08 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:19 remaining] Window lost focus
+8/3/2026, 5:20:35 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:50 remaining] Window regained focus
+8/3/2026, 5:20:29 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:57 remaining] Window lost focus
+8/3/2026, 5:20:29 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 39:57 remaining] Tab hidden / app switched
+8/3/2026, 5:20:29 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 39:58 remaining] Window regained focus
+8/3/2026, 5:20:22 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 43:10 remaining] Window regained focus
+8/3/2026, 5:19:37 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 40:50 remaining] Window lost focus
+8/3/2026, 5:18:07 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 42:46 remaining] Window regained focus
+8/3/2026, 5:18:07 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q3/4 | 42:47 remaining] Tab hidden / app switched
+8/3/2026, 5:18:07 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 42:48 remaining] Window lost focus
+8/3/2026, 5:16:57 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 43:29 remaining] Context menu blocked
+8/3/2026, 5:16:56 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 43:30 remaining] Context menu blocked
+8/3/2026, 5:16:15 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q4/4 | 47:18 remaining] Window lost focus
+8/3/2026, 5:15:00 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 45:25 remaining] Window regained focus
+8/3/2026, 5:14:59 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 45:27 remaining] Window lost focus
+8/3/2026, 5:14:42 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 48:51 remaining] Window regained focus
+8/3/2026, 5:13:18 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 49:45 remaining] Window regained focus
+8/3/2026, 5:13:15 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 49:50 remaining] Window lost focus
+8/3/2026, 5:13:00 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 47:26 remaining] Window regained focus
+8/3/2026, 5:12:48 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 49:06 remaining] Context menu blocked
+8/3/2026, 5:12:28 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 47:58 remaining] Window regained focus
+8/3/2026, 5:12:23 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 48:03 remaining] Window lost focus
+8/3/2026, 5:12:19 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 49:35 remaining] Window regained focus
+8/3/2026, 5:12:04 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 49:50 remaining] Window lost focus
+8/3/2026, 5:12:04 PM	Elizabeth Modupe George	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 49:50 remaining] Tab hidden / app switched
+8/3/2026, 5:12:03 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 48:24 remaining] Tab hidden / app switched
+8/3/2026, 5:12:03 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 48:24 remaining] Window lost focus
+8/3/2026, 5:11:18 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 49:08 remaining] Context menu blocked
+8/3/2026, 5:11:17 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 49:09 remaining] Context menu blocked
+8/3/2026, 5:11:16 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 49:10 remaining] Context menu blocked
+8/3/2026, 5:10:26 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 54:05 remaining] Context menu blocked
+8/3/2026, 5:10:24 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 54:07 remaining] Context menu blocked
+8/3/2026, 5:10:16 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 54:15 remaining] Context menu blocked
+8/3/2026, 5:10:12 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	contextmenu	[Q1/4 | 54:19 remaining] Context menu blocked
+8/3/2026, 5:10:11 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 50:15 remaining] Window regained focus
+8/3/2026, 5:10:02 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 53:49 remaining] Tab hidden / app switched
+8/3/2026, 5:10:01 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 53:50 remaining] Window lost focus
+8/3/2026, 5:10:00 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 50:27 remaining] Tab hidden / app switched
+8/3/2026, 5:10:00 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 50:27 remaining] Window lost focus
+8/3/2026, 5:09:36 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 51:17 remaining] Window regained focus
+8/3/2026, 5:09:28 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q2/4 | 51:26 remaining] Window lost focus
+8/3/2026, 5:09:28 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q2/4 | 51:26 remaining] Tab hidden / app switched
+8/3/2026, 5:09:26 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 50:59 remaining] Window regained focus
+8/3/2026, 5:09:16 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 51:09 remaining] Tab hidden / app switched
+8/3/2026, 5:09:16 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 51:09 remaining] Window lost focus
+8/3/2026, 5:09:02 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 51:24 remaining] Window regained focus
+8/3/2026, 5:08:56 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 51:30 remaining] Tab hidden / app switched
+8/3/2026, 5:08:56 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 51:30 remaining] Window lost focus
+8/3/2026, 5:08:33 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 51:54 remaining] Window regained focus
+8/3/2026, 5:08:30 PM	DTMD Admin	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:56 remaining] Window regained focus
+8/3/2026, 5:08:02 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 52:23 remaining] Tab hidden / app switched
+8/3/2026, 5:08:02 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 52:23 remaining] Window lost focus
+8/3/2026, 5:07:44 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 130:41 remaining] Window regained focus
+8/3/2026, 5:07:44 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 130:41 remaining] Window lost focus
+8/3/2026, 5:07:39 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	copy_paste	[Q1/4 | 130:46 remaining] Clipboard action attempted: paste
+8/3/2026, 5:07:30 PM	Sunday Adacha(ZS-2026-6F4F9C46)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q3/4 | 56:02 remaining] Window lost focus
+8/3/2026, 5:06:25 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 58:07 remaining] Tab hidden / app switched
+8/3/2026, 5:05:04 PM	Dr. Kayode Adelugba (ZS-2026-006)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 59:29 remaining] Tab hidden / app switched
+8/3/2026, 5:03:57 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:54 remaining] Window regained focus
+8/3/2026, 5:03:54 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 56:32 remaining] Window regained focus
+8/3/2026, 5:03:52 PM	Olusegun Oladapo Moses Nanle(ZS-2026-008)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:59 remaining] Window lost focus
+8/3/2026, 5:03:48 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 56:46 remaining] Window lost focus
+8/3/2026, 5:03:29 PM	Rebecca Adeyanju(ZS-2026-007)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:30 remaining] Window regained focus
+8/3/2026, 5:03:11 PM	Nnawulezi Remy Maduabuchi (ZS-2026-001)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:52 remaining] Window regained focus
+8/3/2026, 5:01:59 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 58:28 remaining] Window regained focus
+8/3/2026, 5:01:50 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 58:36 remaining] Tab hidden / app switched
+8/3/2026, 5:01:50 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 58:36 remaining] Window lost focus
+8/3/2026, 5:01:43 PM	Moses ogoroh (ZS-2026-003)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:52 remaining] Window regained focus
+8/3/2026, 5:01:37 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:18 remaining] Window regained focus
+8/3/2026, 5:01:37 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:18 remaining] Window regained focus
+8/3/2026, 5:01:07 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	visibilitychange	[Q1/4 | 59:19 remaining] Tab hidden / app switched
+8/3/2026, 5:01:07 PM	Oludara Okelola(ZS-2026-4A331962)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:19 remaining] Window lost focus
+8/3/2026, 5:00:58 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:55 remaining] Window regained focus
+8/3/2026, 5:00:53 PM	Musa sani senchi(ZS-2026-012)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 60:00 remaining] Window lost focus
+8/3/2026, 5:00:29 PM	Anslem Diayi(ZS-2026-004)	BIST - BIBLE INTRODUCTION/SURVEY/TYPOLOGY	blur	[Q1/4 | 59:57 remaining] Window regained focus

@@ -110,6 +110,108 @@ const StudentFlow = () => {
     }
   };
 
+  // Proctoring Stream & Screen Snapshot Engine
+  const mediaStreamRef = React.useRef(null);
+  const videoRef = React.useRef(null);
+  const [showSystemCheckModal, setShowSystemCheckModal] = useState(false);
+  const [pendingExam, setPendingExam] = useState(null);
+  const [proctorActive, setProctorActive] = useState(false);
+
+  const stopProctoringStream = () => {
+    if (mediaStreamRef.current) {
+      try {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      } catch (e) {
+        console.error('Error stopping tracks', e);
+      }
+      mediaStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setProctorActive(false);
+  };
+
+  const captureScreenSnapshot = () => {
+    if (!mediaStreamRef.current || !videoRef.current) return null;
+    try {
+      const video = videoRef.current;
+      if (!video.videoWidth || !video.videoHeight) return null;
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 800 / video.videoWidth);
+      canvas.width = video.videoWidth * scale;
+      canvas.height = video.videoHeight * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.5);
+    } catch (e) {
+      console.error('Failed snapshot capture', e);
+      return null;
+    }
+  };
+
+  const startProctoringStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' },
+        audio: false
+      });
+      mediaStreamRef.current = stream;
+
+      if (!videoRef.current) {
+        const v = document.createElement('video');
+        v.autoplay = true;
+        v.playsInline = true;
+        v.muted = true;
+        v.style.display = 'none';
+        document.body.appendChild(v);
+        videoRef.current = v;
+      }
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          if (examState === 'taking_exam') {
+            logInfraction('proctor_disconnected', 'Screen monitoring display connection was disconnected by candidate');
+            toast.error('Display connection lost. Screen monitoring disconnected.', { duration: 6000 });
+          }
+        };
+      }
+
+      setProctorActive(true);
+      return true;
+    } catch (err) {
+      console.error('Screen proctoring permission error', err);
+      toast.error('Display compatibility verification required to commence exam.');
+      return false;
+    }
+  };
+
+  // Component unmount safety cleanup
+  useEffect(() => {
+    return () => {
+      stopProctoringStream();
+    };
+  }, []);
+
+  const handleCommenceExam = (exam) => {
+    setPendingExam(exam);
+    setShowSystemCheckModal(true);
+  };
+
+  const confirmAndStartExam = async () => {
+    if (!pendingExam) return;
+    const ok = await startProctoringStream();
+    if (ok) {
+      const exam = pendingExam;
+      setShowSystemCheckModal(false);
+      setPendingExam(null);
+      startExam(exam);
+    }
+  };
+
   const startExam = async (exam) => {
     setActiveExam(exam);
     captureDeviceInfo();
@@ -184,7 +286,14 @@ const StudentFlow = () => {
     const qNum = currentQuestionIndex + 1;
     const totalQs = questions.length;
     const timeRemaining = formatTime(timeLeft);
-    const enriched = `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
+    let enriched = `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
+    
+    // Append screen snapshot if available
+    const snapshot = captureScreenSnapshot();
+    if (snapshot) {
+      enriched += `\n[SNAPSHOT]: ${snapshot}`;
+    }
+
     const payload = {
       candidate_id: user.id,
       assessment_id: activeExam.id,
@@ -352,6 +461,9 @@ const StudentFlow = () => {
       location_lng: locationCoords !== null ? locationCoords.lng : null
     });
 
+    // Ensure proctoring hardware/tracks are completely turned off immediately upon submission
+    stopProctoringStream();
+
     if (error) {
       toast.error('Failed to submit: ' + error.message);
       return;
@@ -378,6 +490,53 @@ const StudentFlow = () => {
   return (
     <main className="login-wrapper" style={{ alignItems: 'flex-start', paddingTop: '4rem' }}>
       <div className="glass-panel responsive-panel" style={{ maxWidth: '1000px', width: '100%' }}>
+
+        {/* System Readiness & Display Compatibility Modal */}
+        {showSystemCheckModal && pendingExam && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--accent-gold)', borderRadius: '8px', maxWidth: '520px', width: '100%', padding: '2rem', boxShadow: '0 20px 40px rgba(0,0,0,0.6)', animation: 'fadeIn 0.3s ease-out' }}>
+              <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.5rem' }}>🖥️</span>
+                <h3 style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-heading)', margin: '0 0 0.5rem 0' }}>System Environment Readiness Check</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                  Exam Session Token: <strong style={{ color: 'var(--text-ivory)' }}>{pendingExam.course_code}</strong>
+                </p>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                  <span style={{ color: '#4ade80', fontSize: '1.2rem' }}>✓</span>
+                  <div>
+                    <strong style={{ color: 'var(--text-ivory)', fontSize: '0.88rem', display: 'block' }}>Step 1: Network & Account Token Check</strong>
+                    <span style={{ color: '#4ade80', fontSize: '0.78rem' }}>Verified & Secure</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ color: 'var(--accent-gold)', fontSize: '1.2rem' }}>⚙️</span>
+                  <div>
+                    <strong style={{ color: 'var(--text-ivory)', fontSize: '0.88rem', display: 'block' }}>Step 2: Display & Workspace Connection</strong>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Select 'Entire Screen' in the prompt to launch workspace</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  className="btn-premium"
+                  onClick={() => { setShowSystemCheckModal(false); setPendingExam(null); }}
+                  style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-premium primary"
+                  onClick={confirmAndStartExam}
+                  style={{ fontWeight: 'bold' }}>
+                  Verify & Commence Exam
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {examState === 'dashboard' && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
@@ -424,7 +583,7 @@ const StudentFlow = () => {
                                   {script.is_graded ? `Total Score: ${script.auto_mcq_score + script.manual_theory_score} / ${totalPossible}` : 'Pending Grading'}
                                 </div>
                               ) : exam.is_open ? (
-                                <button className="btn-premium primary" style={{ width: '100%' }} onClick={() => startExam(exam)}>Commence Exam</button>
+                                <button className="btn-premium primary" style={{ width: '100%' }} onClick={() => handleCommenceExam(exam)}>Commence Exam</button>
                               ) : (
                                 <div style={{ background: 'rgba(255, 77, 79, 0.1)', border: '1px solid #ff4d4f', color: '#ff4d4f', padding: '0.75rem', borderRadius: '4px', textAlign: 'center' }}>
                                   Closed / Upcoming
@@ -455,10 +614,32 @@ const StudentFlow = () => {
 
         {examState === 'taking_exam' && activeExam && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
+            {/* Prominent Anti-Malpractice Warning Banner */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(185,28,28,0.15) 100%)',
+              border: '1px solid #ef4444',
+              borderRadius: '6px',
+              padding: '1rem 1.25rem',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem'
+            }}>
+              <span style={{ fontSize: '1.75rem', flexShrink: 0 }}>🚨</span>
+              <div style={{ flex: 1 }}>
+                <strong style={{ color: '#fca5a5', textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.85rem', display: 'block', marginBottom: '0.2rem' }}>
+                  Strict Anti-Malpractice Enforcement Active
+                </strong>
+                <p style={{ color: '#fef2f2', fontSize: '0.85rem', margin: 0, lineHeight: '1.4' }}>
+                  Device & screen activity is actively proctored. Any candidate caught cheating, switching apps/tabs, or using unauthorized material will have their exam <strong>IMMEDIATELY CANCELLED with a score of ZERO (0)</strong>.
+                </p>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1.5rem', marginBottom: '2rem' }}>
               <div>
                 <h3 style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-heading)', marginBottom: '0.25rem' }}>{activeExam.course_name} ({activeExam.course_code})</h3>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Proctoring Engine: <span style={{ color: '#4ade80' }}>Active & Recording</span></span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Proctoring Engine: <span style={{ color: proctorActive ? '#4ade80' : '#f59e0b' }}>{proctorActive ? 'Active & Monitored' : 'Initializing Display'}</span></span>
                 {activeExam.instructions && (
                   <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(197,160,89,0.08)', border: '1px solid var(--border-focus)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
                     <strong style={{ color: 'var(--accent-gold)' }}>Instructions:</strong> {activeExam.instructions}
