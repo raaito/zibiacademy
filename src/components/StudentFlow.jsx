@@ -583,7 +583,7 @@ const StudentFlow = () => {
                   <strong style={{ color: '#f87171' }}>ANY student caught cheating, engaging in malpractice, or violating examination rules
                   will have their exam IMMEDIATELY CANCELLED</strong> and their score permanently set to{' '}
                   <strong style={{ color: '#ff4d4f', fontSize: '1rem' }}>ZERO (0)</strong>.
-                  All exam sessions are actively proctored with screen monitoring, device tracking, and behaviour analysis.
+                  {/* All exam sessions are actively proctored with screen monitoring, device tracking, and behaviour analysis. */}
                   This institution maintains a strict zero-tolerance policy on academic dishonesty.
                 </p>
               </div>
