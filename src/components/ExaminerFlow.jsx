@@ -35,6 +35,14 @@ const ExaminerFlow = () => {
   const [gradingQuestionsLoading, setGradingQuestionsLoading] = useState(false);
   const [scriptInfractions, setScriptInfractions] = useState([]);
 
+  // Access modal state
+  const [accessModal, setAccessModal] = useState(null); // { assessment } | null
+  const [allStaff, setAllStaff] = useState([]);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [selectedAccessIds, setSelectedAccessIds] = useState([]);
+  const [savingAccess, setSavingAccess] = useState(false);
+  const [forfeitingId, setForfeitingId] = useState(null);
+
   useEffect(() => {
     if (user) {
       fetchCohorts();
@@ -190,6 +198,58 @@ const ExaminerFlow = () => {
     toast.success(`Assessment is now ${!currentStatus ? 'Open' : 'Closed'}`);
   };
 
+  const toggleHideAssessment = async (id, currentHidden) => {
+    const { error } = await supabase.from('assessments').update({ is_hidden: !currentHidden }).eq('id', id);
+    if (error) return toast.error(error.message);
+    setAssessments(assessments.map(a => a.id === id ? { ...a, is_hidden: !currentHidden } : a));
+    toast.success(!currentHidden ? 'Assessment hidden from students.' : 'Assessment is now visible to students.');
+  };
+
+  const openAccessModal = async (assessment) => {
+    setAccessModal(assessment);
+    setAccessLoading(true);
+    const existing = Array.isArray(assessment.grader_access) ? assessment.grader_access : [];
+    setSelectedAccessIds(existing);
+    const { data } = await supabase.from('profiles').select('id, full_name, email, role').in('role', ['examiner', 'superadmin']).order('full_name', { ascending: true });
+    if (data) setAllStaff(data);
+    setAccessLoading(false);
+  };
+
+  const saveAccess = async () => {
+    if (!accessModal) return;
+    setSavingAccess(true);
+    const { error } = await supabase.from('assessments').update({ grader_access: selectedAccessIds }).eq('id', accessModal.id);
+    setSavingAccess(false);
+    if (error) return toast.error('Failed to save access: ' + error.message);
+    setAssessments(assessments.map(a => a.id === accessModal.id ? { ...a, grader_access: selectedAccessIds } : a));
+    toast.success('Grading access updated successfully.');
+    setAccessModal(null);
+  };
+
+  const forfeitStudent = async (script) => {
+    if (!window.confirm(`Forfeit exam for ${script.profiles?.full_name || 'this student'}? Their score will be set to ZERO and this cannot be undone.`)) return;
+    setForfeitingId(script.id);
+    const { error } = await supabase.from('candidate_scripts').update({
+      auto_mcq_score: 0,
+      manual_theory_score: 0,
+      question_scores: {},
+      is_graded: true,
+      device_info: (script.device_info || '') + ' | FORFEIT: Student forfeited this examination. Score set to zero.'
+    }).eq('id', script.id);
+    setForfeitingId(null);
+    if (error) return toast.error('Failed to forfeit: ' + error.message);
+    toast.success(`${script.profiles?.full_name || 'Student'} has forfeited. Score set to 0.`);
+    setScripts(scripts.map(s => s.id === script.id ? { ...s, auto_mcq_score: 0, manual_theory_score: 0, question_scores: {}, is_graded: true } : s));
+  };
+
+  const fetchScripts = async (assessmentId) => {
+    if (!assessmentId) return;
+    const { data: scriptsData } = await supabase.from('candidate_scripts')
+      .select('*, profiles(full_name, matriculation_number)')
+      .eq('assessment_id', assessmentId);
+    if (scriptsData) setScripts(scriptsData);
+  };
+
   const fetchQuestions = async (assessmentId) => {
     const { data } = await supabase.from('questions').select('*').eq('assessment_id', assessmentId).order('sequence_number', { ascending: true });
     if (data) setQuestions(data);
@@ -212,10 +272,7 @@ const ExaminerFlow = () => {
     setSelectedAssessmentId(aid);
     setActiveScript(null);
     if (aid) {
-      const { data: scriptsData } = await supabase.from('candidate_scripts')
-        .select('*, profiles(full_name, matriculation_number)')
-        .eq('assessment_id', aid);
-      if (scriptsData) setScripts(scriptsData);
+      await fetchScripts(aid);
       fetchGradingQuestions(aid);
     } else {
       setScripts([]);
@@ -447,6 +504,22 @@ const ExaminerFlow = () => {
                         <button onClick={() => startEditAssessment(a)} className="btn-premium secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
                           Edit
                         </button>
+                        <button
+                          onClick={() => toggleHideAssessment(a.id, a.is_hidden)}
+                          className="btn-premium"
+                          title={a.is_hidden ? 'Click to make visible to students' : 'Click to hide from students'}
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: a.is_hidden ? '#f59e0b' : '#a3a3a3', borderColor: a.is_hidden ? 'rgba(245,158,11,0.4)' : 'rgba(163,163,163,0.3)' }}
+                        >
+                          {a.is_hidden ? '👁 Unhide' : '🙈 Hide'}
+                        </button>
+                        <button
+                          onClick={() => openAccessModal(a)}
+                          className="btn-premium"
+                          title="Grant grading access to other examiners"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)' }}
+                        >
+                          🔑 Access
+                        </button>
                         <button onClick={() => deleteAssessment(a.id)} className="btn-premium" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#ff4d4f', borderColor: 'rgba(255,77,79,0.3)' }}>
                           Delete
                         </button>
@@ -567,11 +640,24 @@ const ExaminerFlow = () => {
                     {scripts.map(s => (
                       <tr key={s.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         <td style={{ padding: '1rem' }}>{s.profiles?.full_name} ({s.profiles?.matriculation_number})</td>
-                        <td style={{ padding: '1rem' }}>{s.is_graded ? 'Graded' : 'Pending Review'}</td>
+                        <td style={{ padding: '1rem' }}>
+                          {s.device_info?.includes('FORFEIT') ? (
+                            <span style={{ color: '#f97316', fontWeight: 'bold', fontSize: '0.8rem' }}>⛔ Forfeited</span>
+                          ) : s.is_graded ? 'Graded' : 'Pending Review'}
+                        </td>
                         <td style={{ padding: '1rem' }}>{s.auto_mcq_score}</td>
                         <td style={{ padding: '1rem' }}>{s.manual_theory_score}</td>
-                        <td style={{ padding: '1rem' }}>
-                          <button onClick={() => { setActiveScript(s); setScriptInfractions([]); fetchInfractions(s.candidate_id, selectedAssessmentId); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.8rem' }}>Review Script</button>
+                        <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <button onClick={() => { setActiveScript(s); setScriptInfractions([]); fetchInfractions(s.candidate_id, selectedAssessmentId); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>Review Script</button>
+                          <button
+                            onClick={() => forfeitStudent(s)}
+                            disabled={forfeitingId === s.id}
+                            className="btn-premium"
+                            title="Mark student as forfeited — score set to zero"
+                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#fb923c', borderColor: 'rgba(251,146,60,0.35)', opacity: forfeitingId === s.id ? 0.5 : 1 }}
+                          >
+                            {forfeitingId === s.id ? 'Forfeiting...' : '⛔ Forfeit'}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -795,6 +881,83 @@ const ExaminerFlow = () => {
         )}
 
       </div>
+
+      {/* ===== Access Grant Modal ===== */}
+      {accessModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'var(--bg-surface-solid)', border: '1px solid #60a5fa', borderRadius: '10px', maxWidth: '520px', width: '100%', padding: '2rem', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', animation: 'fadeIn 0.3s ease-out' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ color: '#60a5fa', fontFamily: 'var(--font-heading)', margin: '0 0 0.4rem' }}>🔑 Grant Grading Access</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: 0 }}>
+                Select which admins or lecturers can view and grade{' '}
+                <strong style={{ color: 'var(--text-ivory)' }}>{accessModal.course_code} — {accessModal.course_name}</strong>.
+              </p>
+            </div>
+
+            {accessLoading ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading staff list...</div>
+            ) : (
+              <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.5rem' }}>
+                {allStaff.length === 0 && (
+                  <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No other staff found on the system.</p>
+                )}
+                {allStaff.map(staff => {
+                  const isSelected = selectedAccessIds.includes(staff.id);
+                  return (
+                    <label
+                      key={staff.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '0.75rem',
+                        background: isSelected ? 'rgba(96,165,250,0.12)' : 'var(--bg-surface-hover)',
+                        border: `1px solid ${isSelected ? '#60a5fa' : 'var(--border-subtle)'}`,
+                        borderRadius: '6px', padding: '0.75rem 1rem', cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedAccessIds(prev => [...prev, staff.id]);
+                          } else {
+                            setSelectedAccessIds(prev => prev.filter(id => id !== staff.id));
+                          }
+                        }}
+                        style={{ accentColor: '#60a5fa', width: '16px', height: '16px', flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: 'var(--text-ivory)', fontWeight: isSelected ? 'bold' : 'normal', fontSize: '0.9rem' }}>{staff.full_name}</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{staff.email} &middot; <span style={{ color: staff.role === 'superadmin' ? '#f59e0b' : '#60a5fa', textTransform: 'capitalize' }}>{staff.role}</span></div>
+                      </div>
+                      {isSelected && <span style={{ color: '#60a5fa', fontSize: '1.1rem' }}>✓</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setAccessModal(null); setAllStaff([]); setSelectedAccessIds([]); }}
+                className="btn-premium"
+                style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveAccess}
+                disabled={savingAccess || accessLoading}
+                className="btn-premium primary"
+                style={{ fontWeight: 'bold', opacity: savingAccess ? 0.6 : 1 }}
+              >
+                {savingAccess ? 'Saving...' : `Save Access (${selectedAccessIds.length} selected)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 };

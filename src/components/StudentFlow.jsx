@@ -53,6 +53,7 @@ const StudentFlow = () => {
     const { data } = await supabase.from('assessments')
       .select('*')
       .eq('cohort_id', profile.cohort_id)
+      .eq('is_hidden', false)
       .order('semester', { ascending: true })
       .order('created_at', { ascending: false });
 
@@ -552,6 +553,41 @@ const StudentFlow = () => {
                 )}
               </div>
             </header>
+
+            {/* ⚠️ Anti-Cheating Integrity Alert — Dashboard */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(220,38,38,0.18) 0%, rgba(153,27,27,0.12) 100%)',
+              border: '2px solid #dc2626',
+              borderRadius: '8px',
+              padding: '1.25rem 1.5rem',
+              marginBottom: '2rem',
+              display: 'flex',
+              gap: '1rem',
+              alignItems: 'flex-start',
+              boxShadow: '0 0 24px rgba(220,38,38,0.25), inset 0 1px 0 rgba(255,255,255,0.05)',
+              animation: 'fadeIn 0.4s ease-out'
+            }}>
+              <span style={{ fontSize: '2rem', flexShrink: 0, lineHeight: 1 }}>⚠️</span>
+              <div style={{ flex: 1 }}>
+                <strong style={{
+                  color: '#fca5a5',
+                  fontSize: '0.95rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  display: 'block',
+                  marginBottom: '0.4rem'
+                }}>
+                  Academic Integrity Notice — Zero Tolerance Policy
+                </strong>
+                <p style={{ color: '#fee2e2', fontSize: '0.88rem', margin: 0, lineHeight: '1.6' }}>
+                  <strong style={{ color: '#f87171' }}>ANY student caught cheating, engaging in malpractice, or violating examination rules
+                  will have their exam IMMEDIATELY CANCELLED</strong> and their score permanently set to{' '}
+                  <strong style={{ color: '#ff4d4f', fontSize: '1rem' }}>ZERO (0)</strong>.
+                  All exam sessions are actively proctored with screen monitoring, device tracking, and behaviour analysis.
+                  This institution maintains a strict zero-tolerance policy on academic dishonesty.
+                </p>
+              </div>
+            </div>
 
             {(() => {
               const renderCourseList = (list, title) => (
