@@ -172,25 +172,6 @@ const ExaminerFlow = () => {
     if (data) setScriptInfractions(data);
   };
 
-  const [snapshotModal, setSnapshotModal] = useState(null);
-  const [disqualifying, setDisqualifying] = useState(false);
-
-  const disqualifyCandidate = async (script) => {
-    if (!window.confirm(`Disqualify ${script.profiles?.full_name || 'this candidate'} and set score to 0? This action cannot be undone.`)) return;
-    setDisqualifying(true);
-    const { error } = await supabase.from('candidate_scripts').update({
-      auto_mcq_score: 0,
-      manual_theory_score: 0,
-      is_graded: true,
-      device_info: (script.device_info || '') + ' | DISQUALIFIED: Exam cancelled due to confirmed malpractice.'
-    }).eq('id', script.id);
-    setDisqualifying(false);
-    if (error) return toast.error('Failed to disqualify: ' + error.message);
-    toast.success('Candidate disqualified. Score set to 0.');
-    setActiveScript(null);
-    if (selectedAssessmentId) fetchScripts(selectedAssessmentId);
-  };
-
   const toggleAssessmentStatus = async (id, currentStatus) => {
     const { error } = await supabase.from('assessments').update({ is_open: !currentStatus }).eq('id', id);
     if (error) return toast.error(error.message);
@@ -297,35 +278,23 @@ const ExaminerFlow = () => {
 
     if (editingQuestion) {
       let payload = {
-        q_type: effectiveQType,
+        q_type: editingQuestion.q_type,
         question_text: questionText,
         points: Number(points),
       };
 
-      if (effectiveQType === 'mcq') {
-        const optsArray = typeof options === 'string'
-          ? options.split(',').map(o => o.trim()).filter(Boolean)
-          : (Array.isArray(options) ? options : []);
-        payload.options = optsArray;
+      if (editingQuestion.q_type === 'mcq') {
+        payload.options = options.split(',').map(o => o.trim());
         payload.correct_answer = correctAnswer.trim();
       } else {
         payload.options = null;
         payload.correct_answer = null;
       }
 
-      const { data, error } = await supabase
-        .from('questions')
-        .update(payload)
-        .eq('id', editingQuestion.id)
-        .select();
-
+      const { error } = await supabase.from('questions').update(payload).eq('id', editingQuestion.id);
       if (error) return toast.error(error.message);
-      if (!data || data.length === 0) {
-        return toast.error('Failed to update question in database. Please check permissions or verify row exists.');
-      }
-
-      toast.success('Question updated successfully');
-      await fetchQuestions(selectedAssessmentId);
+      toast.success('Question updated');
+      setQuestions(questions.map(q => q.id === editingQuestion.id ? { ...q, ...payload } : q));
       resetQuestionForm();
     } else {
       const newSeq = questions.length + 1;
@@ -338,10 +307,7 @@ const ExaminerFlow = () => {
       };
 
       if (effectiveQType === 'mcq') {
-        const optsArray = typeof options === 'string'
-          ? options.split(',').map(o => o.trim()).filter(Boolean)
-          : (Array.isArray(options) ? options : []);
-        payload.options = optsArray;
+        payload.options = options.split(',').map(o => o.trim());
         payload.correct_answer = correctAnswer.trim();
       }
 
@@ -359,10 +325,7 @@ const ExaminerFlow = () => {
     setQuestionText(question.question_text);
     setPoints(question.points);
     if (question.q_type === 'mcq') {
-      const formattedOptions = Array.isArray(question.options)
-        ? question.options.join(', ')
-        : (question.options || '');
-      setOptions(formattedOptions);
+      setOptions(question.options.join(', '));
       setCorrectAnswer(question.correct_answer || '');
     } else {
       setOptions('Option A, Option B, Option C, Option D');
@@ -595,7 +558,7 @@ const ExaminerFlow = () => {
                           <div style={{ color: 'var(--text-ivory)', margin: '0.5rem 0' }}>{q.question_text}</div>
                           {q.q_type === 'mcq' && (
                             <div style={{ fontSize: '0.85rem', color: '#aaa' }}>
-                              Options: {Array.isArray(q.options) ? q.options.join(' | ') : (q.options || '')}<br />
+                              Options: {q.options.join(' | ')}<br />
                               <span style={{ color: '#00ff88' }}>Ans: {q.correct_answer}</span>
                             </div>
                           )}
@@ -762,94 +725,20 @@ const ExaminerFlow = () => {
                   )}
                 </div>
 
-                {/* Snapshot Viewer Modal */}
-                {snapshotModal && (
-                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={() => setSnapshotModal(null)}>
-                    <div style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--accent-gold)', borderRadius: '8px', maxWidth: '900px', width: '100%', padding: '1.5rem', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <div>
-                          <h4 style={{ color: '#ff4d4f', margin: 0 }}>📸 Screen Capture Evidence</h4>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
-                            {snapshotModal.type} · {new Date(snapshotModal.logged_at).toLocaleString()}
-                          </p>
-                        </div>
-                        <button onClick={() => setSnapshotModal(null)} style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', borderRadius: '4px', padding: '0.3rem 0.7rem', cursor: 'pointer' }}>✕ Close</button>
-                      </div>
-                      <img
-                        src={snapshotModal.snapshot}
-                        alt="Screen capture at time of infraction"
-                        style={{ width: '100%', borderRadius: '4px', border: '1px solid var(--border-subtle)', maxHeight: '70vh', objectFit: 'contain', background: '#000' }}
-                      />
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.75rem', lineHeight: '1.4' }}>
-                        <strong style={{ color: 'var(--text-ivory)' }}>Details:</strong> {snapshotModal.details?.split('\n[SNAPSHOT]')[0]}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {scriptInfractions.length > 0 && (
                   <div style={{ marginBottom: '2rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <h4 style={{ color: '#ff4d4f', margin: 0 }}>🔍 Proctoring Evidence Log ({scriptInfractions.length} infractions)</h4>
-                      <button
-                        onClick={() => disqualifyCandidate(activeScript)}
-                        disabled={disqualifying}
-                        style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '4px', padding: '0.4rem 1rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.82rem', opacity: disqualifying ? 0.6 : 1 }}
-                      >
-                        {disqualifying ? 'Disqualifying...' : '🚫 Disqualify Candidate (Score 0)'}
-                      </button>
-                    </div>
-
-                    {/* Screen Snapshot Thumbnail Strip */}
-                    {(() => {
-                      const withSnapshots = scriptInfractions.filter(inf => inf.details?.includes('[SNAPSHOT]:'));
-                      if (withSnapshots.length === 0) return null;
-                      return (
-                        <div style={{ marginBottom: '1rem' }}>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📸 {withSnapshots.length} Screen Capture(s) — Click to Inspect</p>
-                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {withSnapshots.map((inf, idx) => {
-                              const snapshotData = inf.details?.split('\n[SNAPSHOT]: ')[1];
-                              return (
-                                <div
-                                  key={inf.id}
-                                  onClick={() => setSnapshotModal({ ...inf, snapshot: snapshotData })}
-                                  style={{ cursor: 'pointer', border: '2px solid #ef4444', borderRadius: '4px', overflow: 'hidden', width: '120px', height: '70px', position: 'relative', flexShrink: 0, background: '#000' }}
-                                  title={`Capture ${idx + 1}: ${inf.infraction_type} at ${new Date(inf.logged_at).toLocaleTimeString()}`}
-                                >
-                                  <img src={snapshotData} alt={`Capture ${idx+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} />
-                                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', padding: '2px 4px', fontSize: '0.65rem', color: '#fca5a5', textAlign: 'center' }}>
-                                    #{idx + 1} · {inf.infraction_type}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                    <h4 style={{ color: '#ff4d4f', marginBottom: '1rem' }}>Proctoring Log ({scriptInfractions.length} infractions)</h4>
+                    <div style={{ maxHeight: '200px', overflowY: 'auto', background: 'var(--bg-obsidian)', borderRadius: '4px', padding: '0.75rem' }}>
+                      {scriptInfractions.map(inf => (
+                        <div key={inf.id} style={{ display: 'flex', gap: '1rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
+                          <span style={{ color: 'var(--text-muted)', minWidth: '140px' }}>{new Date(inf.logged_at).toLocaleTimeString()}</span>
+                          <span style={{
+                            color: inf.infraction_type === 'visibilitychange' ? '#ff4d4f' : '#ffaa33',
+                            fontWeight: 'bold', minWidth: '120px'
+                          }}>{inf.infraction_type}</span>
+                          <span style={{ color: 'var(--text-ivory)' }}>{inf.details}</span>
                         </div>
-                      );
-                    })()}
-
-                    <div style={{ maxHeight: '220px', overflowY: 'auto', background: 'var(--bg-obsidian)', borderRadius: '4px', padding: '0.75rem' }}>
-                      {scriptInfractions.map(inf => {
-                        const hasSnapshot = inf.details?.includes('[SNAPSHOT]:');
-                        const cleanDetails = inf.details?.split('\n[SNAPSHOT]')[0];
-                        const snapshotData = hasSnapshot ? inf.details?.split('\n[SNAPSHOT]: ')[1] : null;
-                        const typeColor = inf.infraction_type === 'visibilitychange' || inf.infraction_type === 'proctor_disconnected' ? '#ff4d4f' :
-                          inf.infraction_type === 'copy_paste' ? '#f97316' : '#ffaa33';
-                        return (
-                          <div key={inf.id} style={{ display: 'flex', gap: '0.75rem', padding: '0.5rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.82rem', alignItems: 'flex-start' }}>
-                            <span style={{ color: 'var(--text-muted)', minWidth: '100px', flexShrink: 0 }}>{new Date(inf.logged_at).toLocaleTimeString()}</span>
-                            <span style={{ color: typeColor, fontWeight: 'bold', minWidth: '110px', flexShrink: 0 }}>{inf.infraction_type}</span>
-                            <span style={{ color: 'var(--text-ivory)', flex: 1 }}>{cleanDetails}</span>
-                            {hasSnapshot && snapshotData && (
-                              <button
-                                onClick={() => setSnapshotModal({ ...inf, snapshot: snapshotData })}
-                                style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '3px', padding: '0.15rem 0.5rem', cursor: 'pointer', fontSize: '0.72rem', flexShrink: 0 }}
-                              >📸 View Screen</button>
-                            )}
-                          </div>
-                        );
-                      })}
+                      ))}
                     </div>
                   </div>
                 )}

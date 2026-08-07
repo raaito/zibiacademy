@@ -222,39 +222,10 @@ const SuperAdminFlow = () => {
     setProctorLoading(true);
     const { data } = await supabase
       .from('infraction_logs')
-      .select('*, profiles(full_name, matriculation_number), assessments(course_code, course_name, id)')
+      .select('*, profiles(full_name, matriculation_number), assessments(course_code, course_name)')
       .order('logged_at', { ascending: false });
     if (data) setProctorData(data);
     setProctorLoading(false);
-  };
-
-  const [snapshotModalAdmin, setSnapshotModalAdmin] = useState(null);
-  const [adminDisqualifying, setAdminDisqualifying] = useState(null);
-
-  const disqualifyFromAdmin = async (inf) => {
-    const name = inf.profiles?.full_name || 'this candidate';
-    if (!window.confirm(`Disqualify ${name} from ${inf.assessments?.course_code || 'this exam'} and set score to 0? This cannot be undone.`)) return;
-    setAdminDisqualifying(inf.id);
-    const { data: scriptData } = await supabase
-      .from('candidate_scripts')
-      .select('id, device_info')
-      .eq('candidate_id', inf.candidate_id)
-      .eq('assessment_id', inf.assessment_id)
-      .single();
-    if (!scriptData) {
-      toast.error('No submission found for this candidate.');
-      setAdminDisqualifying(null);
-      return;
-    }
-    const { error } = await supabase.from('candidate_scripts').update({
-      auto_mcq_score: 0,
-      manual_theory_score: 0,
-      is_graded: true,
-      device_info: (scriptData.device_info || '') + ' | DISQUALIFIED: Exam cancelled due to confirmed malpractice (Admin action).'
-    }).eq('id', scriptData.id);
-    setAdminDisqualifying(null);
-    if (error) return toast.error('Disqualification failed: ' + error.message);
-    toast.success(`${name} disqualified. Score set to 0.`);
   };
 
   useEffect(() => {
@@ -521,50 +492,7 @@ const SuperAdminFlow = () => {
 
             {activeTab === 'proctoring' && (
               <div>
-                {/* Snapshot Viewer Modal */}
-                {snapshotModalAdmin && (
-                  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={() => setSnapshotModalAdmin(null)}>
-                    <div style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--accent-gold)', borderRadius: '8px', maxWidth: '900px', width: '100%', padding: '1.5rem', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <div>
-                          <h4 style={{ color: '#ff4d4f', margin: 0 }}>📸 Screen Capture Evidence</h4>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
-                            {snapshotModalAdmin.profiles?.full_name} · {snapshotModalAdmin.infraction_type} · {new Date(snapshotModalAdmin.logged_at).toLocaleString()}
-                          </p>
-                        </div>
-                        <button onClick={() => setSnapshotModalAdmin(null)} style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', borderRadius: '4px', padding: '0.3rem 0.7rem', cursor: 'pointer' }}>✕ Close</button>
-                      </div>
-                      <img
-                        src={snapshotModalAdmin.snapshot}
-                        alt="Screen capture at time of infraction"
-                        style={{ width: '100%', borderRadius: '4px', border: '1px solid var(--border-subtle)', maxHeight: '65vh', objectFit: 'contain', background: '#000' }}
-                      />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.75rem', gap: '1rem', flexWrap: 'wrap' }}>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: '1.4', margin: 0, flex: 1 }}>
-                          <strong style={{ color: 'var(--text-ivory)' }}>Details:</strong> {snapshotModalAdmin.details?.split('\n[SNAPSHOT]')[0]}
-                        </p>
-                        <button
-                          onClick={() => { setSnapshotModalAdmin(null); disqualifyFromAdmin(snapshotModalAdmin); }}
-                          disabled={adminDisqualifying === snapshotModalAdmin.id}
-                          style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '4px', padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.82rem', whiteSpace: 'nowrap', flexShrink: 0 }}
-                        >
-                          🚫 Disqualify Candidate
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <h3 style={{ color: 'var(--text-ivory)', margin: 0 }}>🔍 Proctoring Evidence Dashboard</h3>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.82rem' }}>
-                    <span style={{ color: '#ff4d4f' }}>● {proctorData.filter(d => d.infraction_type === 'visibilitychange' || d.infraction_type === 'proctor_disconnected').length} Critical</span>
-                    <span style={{ color: '#f97316' }}>● {proctorData.filter(d => d.infraction_type === 'copy_paste').length} Clipboard</span>
-                    <span style={{ color: '#ffaa33' }}>● {proctorData.filter(d => d.details?.includes('[SNAPSHOT]:')).length} Captures</span>
-                    <button onClick={fetchProctorLogs} style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', borderRadius: '4px', padding: '0.3rem 0.75rem', cursor: 'pointer', fontSize: '0.78rem' }}>↻ Refresh</button>
-                  </div>
-                </div>
-
+                <h3 style={{ color: 'var(--text-ivory)', marginBottom: '1rem' }}>Proctoring Logs</h3>
                 {proctorLoading ? (
                   <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading logs...</div>
                 ) : proctorData.length === 0 ? (
@@ -572,67 +500,44 @@ const SuperAdminFlow = () => {
                 ) : (
                   <div className="admin-table-container" style={{ maxHeight: '600px', overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
-                      <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface-solid)', zIndex: 1 }}>
+                      <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface-solid)' }}>
                         <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Time</th>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Candidate</th>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Assessment</th>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Type</th>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Details</th>
-                          <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {proctorData.map(inf => {
-                          const hasSnapshot = inf.details?.includes('[SNAPSHOT]:');
-                          const cleanDetails = inf.details?.split('\n[SNAPSHOT]')[0];
-                          const snapshotData = hasSnapshot ? inf.details?.split('\n[SNAPSHOT]: ')[1] : null;
-                          const isCritical = inf.infraction_type === 'visibilitychange' || inf.infraction_type === 'proctor_disconnected';
-                          const isClipboard = inf.infraction_type === 'copy_paste';
-                          const typeColor = isCritical ? '#ff4d4f' : isClipboard ? '#f97316' : '#ffaa33';
-                          const typeBg = isCritical ? 'rgba(255,77,79,0.15)' : isClipboard ? 'rgba(249,115,22,0.15)' : 'rgba(255,170,51,0.15)';
-                          return (
-                            <tr key={inf.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: isCritical ? 'rgba(255,77,79,0.03)' : 'transparent' }}>
-                              <td style={{ padding: '0.75rem', fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                {new Date(inf.logged_at).toLocaleString()}
-                              </td>
-                              <td style={{ padding: '0.75rem' }}>
-                                <span style={{ color: 'var(--text-ivory)', display: 'block' }}>{inf.profiles?.full_name || 'Unknown'}</span>
-                                {inf.profiles?.matriculation_number && (
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({inf.profiles.matriculation_number})</span>
-                                )}
-                              </td>
-                              <td style={{ padding: '0.75rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                                {inf.assessments?.course_code} - {inf.assessments?.course_name}
-                              </td>
-                              <td style={{ padding: '0.75rem' }}>
-                                <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 'bold', background: typeBg, color: typeColor }}>
-                                  {inf.infraction_type}
+                        {proctorData.map(inf => (
+                          <tr key={inf.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                            <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                              {new Date(inf.logged_at).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{ color: 'var(--text-ivory)' }}>{inf.profiles?.full_name || 'Unknown'}</span>
+                              {inf.profiles?.matriculation_number && (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+                                  ({inf.profiles.matriculation_number})
                                 </span>
-                              </td>
-                              <td style={{ padding: '0.75rem', fontSize: '0.82rem', color: 'var(--text-ivory)', maxWidth: '220px' }}>
-                                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={cleanDetails}>
-                                  {cleanDetails}
-                                </span>
-                              </td>
-                              <td style={{ padding: '0.75rem', whiteSpace: 'nowrap' }}>
-                                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                                  {hasSnapshot && snapshotData && (
-                                    <button
-                                      onClick={() => setSnapshotModalAdmin({ ...inf, snapshot: snapshotData })}
-                                      style={{ background: 'rgba(197,160,89,0.15)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '3px', padding: '0.2rem 0.5rem', cursor: 'pointer', fontSize: '0.72rem' }}
-                                    >📸 View</button>
-                                  )}
-                                  <button
-                                    onClick={() => disqualifyFromAdmin(inf)}
-                                    disabled={adminDisqualifying === inf.id}
-                                    style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '3px', padding: '0.2rem 0.5rem', cursor: 'pointer', fontSize: '0.72rem', opacity: adminDisqualifying === inf.id ? 0.5 : 1 }}
-                                  >{adminDisqualifying === inf.id ? '...' : '🚫 DQ'}</button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                              )}
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.85rem' }}>
+                              {inf.assessments?.course_code} - {inf.assessments?.course_name}
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{
+                                padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold',
+                                background: inf.infraction_type === 'visibilitychange' ? 'rgba(255,77,79,0.15)' : 'rgba(255,170,51,0.15)',
+                                color: inf.infraction_type === 'visibilitychange' ? '#ff4d4f' : '#ffaa33'
+                              }}>
+                                {inf.infraction_type}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-ivory)' }}>{inf.details}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
