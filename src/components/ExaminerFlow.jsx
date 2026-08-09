@@ -42,6 +42,8 @@ const ExaminerFlow = () => {
   const [selectedAccessIds, setSelectedAccessIds] = useState([]);
   const [savingAccess, setSavingAccess] = useState(false);
   const [forfeitingId, setForfeitingId] = useState(null);
+  const [deletingScriptId, setDeletingScriptId] = useState(null);
+  const [confirmDeleteScript, setConfirmDeleteScript] = useState(null); // script object awaiting delete confirmation
 
   useEffect(() => {
     if (user) {
@@ -221,6 +223,20 @@ const ExaminerFlow = () => {
     if (error) return toast.error('Failed to forfeit: ' + error.message);
     toast.success(`${script.profiles?.full_name || 'Student'} has forfeited. Score set to 0.`);
     setScripts(scripts.map(s => s.id === script.id ? { ...s, auto_mcq_score: 0, manual_theory_score: 0, question_scores: {}, is_graded: true } : s));
+  };
+
+  const deleteScript = async (script) => {
+    setConfirmDeleteScript(null);
+    setDeletingScriptId(script.id);
+    // Remove infraction logs first, then the script itself
+    await supabase.from('infraction_logs').delete()
+      .eq('candidate_id', script.candidate_id)
+      .eq('assessment_id', script.assessment_id);
+    const { error } = await supabase.from('candidate_scripts').delete().eq('id', script.id);
+    setDeletingScriptId(null);
+    if (error) return toast.error('Failed to delete record: ' + error.message);
+    toast.success(`Exam record for ${script.profiles?.full_name || 'student'} has been deleted.`);
+    setScripts(prev => prev.filter(s => s.id !== script.id));
   };
 
   const fetchScripts = async (assessmentId) => {
@@ -621,6 +637,15 @@ const ExaminerFlow = () => {
                           >
                             {forfeitingId === s.id ? 'Forfeiting...' : '⛔ Forfeit'}
                           </button>
+                          <button
+                            onClick={() => setConfirmDeleteScript(s)}
+                            disabled={deletingScriptId === s.id}
+                            className="btn-premium"
+                            title="Permanently delete this student's exam record"
+                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.35)', opacity: deletingScriptId === s.id ? 0.5 : 1 }}
+                          >
+                            {deletingScriptId === s.id ? 'Deleting...' : '🗑️ Delete Record'}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -841,6 +866,106 @@ const ExaminerFlow = () => {
                 style={{ fontWeight: 'bold', opacity: savingAccess ? 0.6 : 1 }}
               >
                 {savingAccess ? 'Saving...' : `Save Access (${selectedAccessIds.length} selected)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Delete Script Confirmation Modal ===== */}
+      {confirmDeleteScript && (
+        <div
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.82)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999,
+            animation: 'fadeIn 0.2s ease',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setConfirmDeleteScript(null); }}
+        >
+          <div style={{
+            background: 'var(--bg-surface-solid)',
+            border: '1px solid rgba(248,113,113,0.5)',
+            borderRadius: '12px',
+            padding: '2rem',
+            maxWidth: '420px',
+            width: '90%',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
+            animation: 'slideUp 0.25s ease',
+          }}>
+            {/* Icon */}
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: '56px', height: '56px', borderRadius: '50%',
+                background: 'rgba(248,113,113,0.12)',
+                border: '2px solid #f87171',
+                fontSize: '1.75rem',
+              }}>🗑️</div>
+            </div>
+
+            <h3 style={{
+              color: '#f87171',
+              textAlign: 'center',
+              marginBottom: '0.5rem',
+              fontSize: '1.15rem',
+              fontWeight: 700,
+            }}>Delete Exam Record?</h3>
+
+            <div style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '8px',
+              padding: '1rem',
+              margin: '1rem 0 1.25rem',
+              textAlign: 'center',
+            }}>
+              <p style={{ color: 'var(--text-ivory)', fontWeight: 700, fontSize: '0.95rem', margin: 0 }}>
+                {confirmDeleteScript.profiles?.full_name}
+              </p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.3rem 0 0' }}>
+                {confirmDeleteScript.profiles?.matriculation_number}
+              </p>
+            </div>
+
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.87rem', textAlign: 'center', marginBottom: '1.75rem', lineHeight: 1.65 }}>
+              This will <strong style={{ color: '#f87171' }}>permanently delete</strong> all answers, scores, and infraction logs for this student on this assessment. <strong style={{ color: 'var(--text-ivory)' }}>This cannot be undone.</strong>
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => setConfirmDeleteScript(null)}
+                style={{
+                  flex: 1, padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  fontWeight: 600, cursor: 'pointer',
+                  fontSize: '0.9rem', transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteScript(confirmDeleteScript)}
+                style={{
+                  flex: 1, padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(248,113,113,0.6)',
+                  background: 'rgba(248,113,113,0.15)',
+                  color: '#f87171',
+                  fontWeight: 700, cursor: 'pointer',
+                  fontSize: '0.9rem', transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.28)'; e.currentTarget.style.color = '#fca5a5'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.15)'; e.currentTarget.style.color = '#f87171'; }}
+              >
+                🗑️ Yes, Delete Permanently
               </button>
             </div>
           </div>
