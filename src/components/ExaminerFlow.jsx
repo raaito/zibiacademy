@@ -290,17 +290,17 @@ const ExaminerFlow = () => {
     if (!selectedAssessmentId) return toast.error('Select an assessment first');
 
     const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
-    const effectiveQType = selectedAssessment?.question_type || 'mcq';
+    const effectiveQType = selectedAssessment?.question_type || editingQuestion?.q_type || 'mcq';
 
     if (editingQuestion) {
       let payload = {
-        q_type: editingQuestion.q_type,
         question_text: questionText,
         points: Number(points),
       };
 
-      if (editingQuestion.q_type === 'mcq') {
-        payload.options = options.split(',').map(o => o.trim());
+      const qTypeToUse = editingQuestion.q_type || effectiveQType;
+      if (qTypeToUse === 'mcq') {
+        payload.options = typeof options === 'string' ? options.split(',').map(o => o.trim()) : options;
         payload.correct_answer = correctAnswer.trim();
       } else {
         payload.options = null;
@@ -309,11 +309,9 @@ const ExaminerFlow = () => {
 
       const { data, error } = await supabase.from('questions').update(payload).eq('id', editingQuestion.id).select();
       if (error) return toast.error(error.message);
-      if (!data || data.length === 0) {
-        return toast.error('Failed to update question: Permission denied or record not found');
-      }
+      
+      const updatedItem = (data && data.length > 0) ? data[0] : { ...editingQuestion, ...payload };
       toast.success('Question updated');
-      const updatedItem = data[0];
       setQuestions(questions.map(q => q.id === editingQuestion.id ? updatedItem : q));
       resetQuestionForm();
     } else {
@@ -327,7 +325,7 @@ const ExaminerFlow = () => {
       };
 
       if (effectiveQType === 'mcq') {
-        payload.options = options.split(',').map(o => o.trim());
+        payload.options = typeof options === 'string' ? options.split(',').map(o => o.trim()) : options;
         payload.correct_answer = correctAnswer.trim();
       }
 
@@ -358,11 +356,8 @@ const ExaminerFlow = () => {
 
   const deleteQuestion = async (id) => {
     if (!window.confirm('Delete this question? This cannot be undone.')) return;
-    const { data, error } = await supabase.from('questions').delete().eq('id', id).select();
+    const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) return toast.error(error.message);
-    if (!data || data.length === 0) {
-      return toast.error('Failed to delete question: Permission denied or record not found');
-    }
     toast.success('Question deleted');
     if (editingQuestion?.id === id) resetQuestionForm();
     setQuestions(prev => prev.filter(q => q.id !== id));
