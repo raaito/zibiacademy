@@ -92,3 +92,14 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--accent-gold-hover);
   box-shadow: 0 0 15px var(--accent-gold-muted);
 }
+
+/* ── Confirmation Modal Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}

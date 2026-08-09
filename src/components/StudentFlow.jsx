@@ -27,6 +27,7 @@ const StudentFlow = () => {
   const [assessments, setAssessments] = useState([]);
   const [takenScripts, setTakenScripts] = useState([]);
   const [totalScoresMap, setTotalScoresMap] = useState({});
+  const [confirmExam, setConfirmExam] = useState(null); // exam object awaiting confirmation, or null
 
   // Active Exam States
   const [activeExam, setActiveExam] = useState(null);
@@ -460,7 +461,7 @@ const StudentFlow = () => {
                                   {script.is_graded ? `Total Score: ${script.auto_mcq_score + script.manual_theory_score} / ${totalPossible}` : 'Pending Grading'}
                                 </div>
                               ) : exam.is_open ? (
-                                <button className="btn-premium primary" style={{ width: '100%' }} onClick={() => startExam(exam)}>Commence Exam</button>
+                                <button className="btn-premium primary" style={{ width: '100%' }} onClick={() => setConfirmExam(exam)}>Commence Exam</button>
                               ) : (
                                 <div style={{ background: 'rgba(255, 77, 79, 0.1)', border: '1px solid #ff4d4f', color: '#ff4d4f', padding: '0.75rem', borderRadius: '4px', textAlign: 'center' }}>
                                   Closed / Upcoming
@@ -486,6 +487,105 @@ const StudentFlow = () => {
                 );
               }
             })()}
+
+          {/* ── Exam Confirmation Modal ── */}
+          {confirmExam && (
+            <div
+              style={{
+                position: 'fixed', inset: 0,
+                background: 'rgba(0,0,0,0.75)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 9999,
+                animation: 'fadeIn 0.2s ease',
+              }}
+              onClick={(e) => { if (e.target === e.currentTarget) setConfirmExam(null); }}
+            >
+              <div
+                style={{
+                  background: 'var(--bg-surface-solid)',
+                  border: '1px solid var(--border-focus)',
+                  borderRadius: 'var(--radius-md, 12px)',
+                  padding: '2rem',
+                  maxWidth: '440px',
+                  width: '90%',
+                  boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+                  animation: 'slideUp 0.25s ease',
+                }}
+              >
+                {/* Icon */}
+                <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: '56px', height: '56px', borderRadius: '50%',
+                    background: 'rgba(255, 195, 0, 0.12)',
+                    border: '2px solid var(--accent-gold, #ffc300)',
+                    fontSize: '1.75rem',
+                  }}>📋</div>
+                </div>
+
+                {/* Title */}
+                <h3 style={{
+                  color: 'var(--text-primary, #fff)',
+                  textAlign: 'center',
+                  marginBottom: '0.5rem',
+                  fontSize: '1.2rem',
+                  fontWeight: 700,
+                }}>Start This Exam?</h3>
+
+                {/* Exam info */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  margin: '1rem 0 1.5rem',
+                  textAlign: 'center',
+                }}>
+                  <p style={{ color: 'var(--accent-gold, #ffc300)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>
+                    {confirmExam.course_name}
+                  </p>
+                  <p style={{ color: 'var(--text-muted, #aaa)', fontSize: '0.85rem', margin: '0.3rem 0 0' }}>
+                    {confirmExam.course_code} &nbsp;·&nbsp; {confirmExam.duration_minutes} minutes
+                  </p>
+                </div>
+
+                <p style={{ color: 'var(--text-muted, #bbb)', fontSize: '0.88rem', textAlign: 'center', marginBottom: '1.75rem', lineHeight: 1.6 }}>
+                  Once you begin, the countdown timer will start immediately and <strong style={{ color: 'var(--text-primary, #fff)' }}>cannot be paused</strong>. Make sure you are ready before proceeding.
+                </p>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    onClick={() => setConfirmExam(null)}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: 'transparent',
+                      color: 'var(--text-muted, #aaa)',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = '#fff'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted, #aaa)'; }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-premium primary"
+                    onClick={() => { setConfirmExam(null); startExam(confirmExam); }}
+                    style={{ flex: 1, padding: '0.75rem', fontSize: '0.9rem' }}
+                  >
+                    ✅ Confirm &amp; Begin
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           </div>
         )}
 
