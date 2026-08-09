@@ -44,6 +44,7 @@ const ExaminerFlow = () => {
   const [forfeitingId, setForfeitingId] = useState(null);
   const [deletingScriptId, setDeletingScriptId] = useState(null);
   const [confirmDeleteScript, setConfirmDeleteScript] = useState(null); // script object awaiting delete confirmation
+  const [selectedScriptIds, setSelectedScriptIds] = useState([]);
 
   useEffect(() => {
     if (user) {
@@ -268,6 +269,7 @@ const ExaminerFlow = () => {
     const aid = e.target.value;
     setSelectedAssessmentId(aid);
     setActiveScript(null);
+    setSelectedScriptIds([]);
     if (aid) {
       await fetchScripts(aid);
       fetchGradingQuestions(aid);
@@ -275,6 +277,360 @@ const ExaminerFlow = () => {
       setScripts([]);
       setGradingQuestions([]);
     }
+  };
+
+  const toggleSelectAllScripts = () => {
+    if (selectedScriptIds.length === scripts.length) {
+      setSelectedScriptIds([]);
+    } else {
+      setSelectedScriptIds(scripts.map(s => s.id));
+    }
+  };
+
+  const toggleSelectScript = (id) => {
+    setSelectedScriptIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const escapeCSV = (val) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const downloadCSV = (filename, csvContent) => {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportExamRecords = (targetScripts) => {
+    if (!targetScripts || targetScripts.length === 0) {
+      return toast.error('No student records selected for export.');
+    }
+
+    const assessment = assessments.find(a => a.id === selectedAssessmentId);
+    const courseCode = assessment?.course_code || 'Assessment';
+
+    const headers = [
+      'Student Name',
+      'Matriculation Number',
+      'Course Code',
+      'Course Name',
+      'Status',
+      'MCQ Score',
+      'Theory Score',
+      'Total Score',
+      'Submitted At'
+    ];
+
+    const rows = targetScripts.map(s => {
+      const isForfeit = s.device_info?.includes('FORFEIT');
+      const status = isForfeit ? 'Forfeited' : (s.is_graded ? 'Graded' : 'Pending Review');
+      const totalScore = (s.auto_mcq_score || 0) + (s.manual_theory_score || 0);
+      const submittedAt = s.submitted_at ? new Date(s.submitted_at).toLocaleString() : 'N/A';
+
+      return [
+        escapeCSV(s.profiles?.full_name || 'N/A'),
+        escapeCSV(s.profiles?.matriculation_number || 'N/A'),
+        escapeCSV(assessment?.course_code || 'N/A'),
+        escapeCSV(assessment?.course_name || 'N/A'),
+        escapeCSV(status),
+        s.auto_mcq_score || 0,
+        s.manual_theory_score || 0,
+        totalScore,
+        escapeCSV(submittedAt)
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const filename = `Exam_Records_${courseCode}_${new Date().toISOString().slice(0, 10)}.csv`;
+    downloadCSV(filename, csvContent);
+    toast.success(`Exported exam records for ${targetScripts.length} student(s).`);
+  };
+
+  const exportProctoringRecords = async (targetScripts) => {
+    if (!targetScripts || targetScripts.length === 0) {
+      return toast.error('No student records selected for proctoring export.');
+    }
+
+    const assessment = assessments.find(a => a.id === selectedAssessmentId);
+    const courseCode = assessment?.course_code || 'Assessment';
+    const candidateIds = targetScripts.map(s => s.candidate_id);
+
+    const toastId = toast.loading('Fetching proctoring logs...');
+
+    const { data: infractions } = await supabase
+      .from('infraction_logs')
+      .select('*')
+      .eq('assessment_id', selectedAssessmentId)
+      .in('candidate_id', candidateIds)
+      .order('logged_at', { ascending: true });
+
+    toast.dismiss(toastId);
+
+    const infractionMap = {};
+    if (infractions) {
+      infractions.forEach(inf => {
+        if (!infractionMap[inf.candidate_id]) infractionMap[inf.candidate_id] = [];
+        infractionMap[inf.candidate_id].push(inf);
+      });
+    }
+
+    const headers = [
+      'Student Name',
+      'Matriculation Number',
+      'Status',
+      'IP Address',
+      'Latitude',
+      'Longitude',
+      'Device Info',
+      'Total Infractions',
+      'Infraction Details & Timeline',
+      'Submitted At'
+    ];
+
+    const rows = targetScripts.map(s => {
+      const isForfeit = s.device_info?.includes('FORFEIT');
+      const status = isForfeit ? 'Forfeited' : (s.is_graded ? 'Graded' : 'Pending Review');
+      const logs = infractionMap[s.candidate_id] || [];
+      const infractionDetails = logs.map(l =>
+        `[${new Date(l.logged_at).toLocaleTimeString()}] ${l.infraction_type}: ${l.details || 'N/A'}`
+      ).join(' | ');
+
+      return [
+        escapeCSV(s.profiles?.full_name || 'N/A'),
+        escapeCSV(s.profiles?.matriculation_number || 'N/A'),
+        escapeCSV(status),
+        escapeCSV(s.ip_address || 'N/A'),
+        s.location_lat || '',
+        s.location_lng || '',
+        escapeCSV(s.device_info || 'N/A'),
+        logs.length,
+        escapeCSV(infractionDetails || 'None'),
+        escapeCSV(s.submitted_at ? new Date(s.submitted_at).toLocaleString() : 'N/A')
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const filename = `Proctoring_Report_${courseCode}_${new Date().toISOString().slice(0, 10)}.csv`;
+    downloadCSV(filename, csvContent);
+    toast.success(`Exported proctoring report for ${targetScripts.length} student(s).`);
+  };
+
+  const exportExamPDF = async (targetScripts) => {
+    if (!targetScripts || targetScripts.length === 0) {
+      return toast.error('No student records selected for PDF export.');
+    }
+
+    const assessment = assessments.find(a => a.id === selectedAssessmentId);
+    const courseCode = assessment?.course_code || 'Assessment';
+    const courseName = assessment?.course_name || '';
+
+    // Ensure questions are loaded
+    let qList = gradingQuestions;
+    if (!qList || qList.length === 0) {
+      const toastId = toast.loading('Fetching assessment questions for PDF...');
+      const { data: qData } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('assessment_id', selectedAssessmentId)
+        .order('sequence_number', { ascending: true });
+      toast.dismiss(toastId);
+      if (qData) {
+        qList = qData;
+        setGradingQuestions(qData);
+      }
+    }
+
+    // Fetch infractions for target candidates
+    const candidateIds = targetScripts.map(s => s.candidate_id);
+    const { data: infractions } = await supabase
+      .from('infraction_logs')
+      .select('*')
+      .eq('assessment_id', selectedAssessmentId)
+      .in('candidate_id', candidateIds)
+      .order('logged_at', { ascending: true });
+
+    const infractionMap = {};
+    if (infractions) {
+      infractions.forEach(inf => {
+        if (!infractionMap[inf.candidate_id]) infractionMap[inf.candidate_id] = [];
+        infractionMap[inf.candidate_id].push(inf);
+      });
+    }
+
+    // Build Printable HTML Document for PDF output
+    let pagesHtml = targetScripts.map((s) => {
+      const isForfeit = s.device_info?.includes('FORFEIT');
+      const statusClass = isForfeit ? 'badge-forfeited' : (s.is_graded ? 'badge-graded' : 'badge-pending');
+      const statusText = isForfeit ? 'FORFEITED' : (s.is_graded ? 'GRADED' : 'PENDING REVIEW');
+      const totalScore = (s.auto_mcq_score || 0) + (s.manual_theory_score || 0);
+      const totalPossible = qList ? qList.reduce((sum, q) => sum + (q.points || 0), 0) : 0;
+      const logs = infractionMap[s.candidate_id] || [];
+      const submittedAt = s.submitted_at ? new Date(s.submitted_at).toLocaleString() : 'N/A';
+
+      let qaContent = '';
+      if (qList && qList.length > 0) {
+        qaContent = qList.map((q, qIdx) => {
+          const answer = s.answers ? s.answers[q.id] : undefined;
+          const isMcq = q.q_type === 'mcq';
+          const isCorrect = isMcq && answer === q.correct_answer;
+          const qScore = s.question_scores?.[q.id];
+
+          let evalHtml = '';
+          if (answer !== undefined && answer !== '') {
+            if (isMcq) {
+              evalHtml = isCorrect
+                ? `<div class="eval-tag eval-correct">✓ Correct (+${q.points} pts)</div>`
+                : `<div class="eval-tag eval-incorrect">✗ Incorrect &bull; Correct Answer: ${q.correct_answer}</div>`;
+            } else {
+              evalHtml = `<div class="eval-tag eval-score">Score Awarded: ${qScore !== undefined ? qScore : 'Pending'} / ${q.points} pts</div>`;
+            }
+          } else {
+            evalHtml = `<div class="eval-tag eval-incorrect">No answer provided (0 pts)</div>`;
+          }
+
+          return `
+            <div class="qa-box">
+              <div class="q-header">Q${qIdx + 1}. ${q.q_type.toUpperCase()} (${q.points} Pts)</div>
+              <div class="q-text">${q.question_text}</div>
+              <div class="a-box">${answer !== undefined && answer !== '' ? String(answer) : '<em style="color:#94a3b8">Unanswered</em>'}</div>
+              ${evalHtml}
+            </div>
+          `;
+        }).join('');
+      } else {
+        qaContent = `<div class="qa-box"><em style="color:#64748b">Raw Answers: ${JSON.stringify(s.answers || {})}</em></div>`;
+      }
+
+      let infractionTableHtml = '';
+      if (logs.length > 0) {
+        infractionTableHtml = `
+          <div class="section-title" style="color:#dc2626">Proctoring &amp; Anti-Cheat Audit Log (${logs.length} Event${logs.length > 1 ? 's' : ''})</div>
+          <table class="table-proctor">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Infraction Type</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${logs.map(l => `
+                <tr>
+                  <td>${new Date(l.logged_at).toLocaleTimeString()}</td>
+                  <td><strong style="color:#dc2626">${l.infraction_type}</strong></td>
+                  <td>${l.details || 'N/A'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      return `
+        <div class="student-page">
+          <div class="doc-header">
+            <h1>EXAMINATION RECORD &amp; TRANSCRIPT</h1>
+            <p><strong>${courseCode} &mdash; ${courseName}</strong> &bull; Generated on ${new Date().toLocaleDateString()}</p>
+          </div>
+
+          <div class="meta-card">
+            <div class="meta-grid">
+              <div class="meta-item">
+                <strong>Candidate Name</strong>
+                <span>${s.profiles?.full_name || 'N/A'}</span>
+              </div>
+              <div class="meta-item">
+                <strong>Matric Number</strong>
+                <span>${s.profiles?.matriculation_number || 'N/A'}</span>
+              </div>
+              <div class="meta-item">
+                <strong>Status</strong>
+                <span><span class="badge ${statusClass}">${statusText}</span></span>
+              </div>
+              <div class="meta-item">
+                <strong>Final Score</strong>
+                <span>${totalScore} / ${totalPossible} Pts</span>
+              </div>
+            </div>
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #64748b;">
+              Submitted At: <strong>${submittedAt}</strong> &bull; 
+              IP Address: <strong>${s.ip_address || 'N/A'}</strong> &bull; 
+              Location: <strong>${s.location_lat ? `${s.location_lat.toFixed(4)}, ${s.location_lng.toFixed(4)}` : 'N/A'}</strong> &bull;
+              Infractions Recorded: <strong style="color:${logs.length > 0 ? '#dc2626' : '#16a34a'}">${logs.length}</strong>
+            </div>
+          </div>
+
+          <div class="section-title">Questions &amp; Candidate Answers Breakdown</div>
+          ${qaContent}
+
+          ${infractionTableHtml}
+        </div>
+      `;
+    }).join('');
+
+    const fullDoc = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Exam Report - ${courseCode}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; color: #1e293b; background: #fff; font-size: 13px; line-height: 1.5; }
+          @page { size: A4; margin: 15mm; }
+          .student-page { page-break-after: always; padding-bottom: 20px; }
+          .student-page:last-child { page-break-after: avoid; }
+          .doc-header { text-align: center; border-bottom: 2px solid #c5a059; padding-bottom: 12px; margin-bottom: 20px; }
+          .doc-header h1 { margin: 0 0 4px 0; color: #0f172a; font-size: 20px; letter-spacing: -0.02em; }
+          .doc-header p { margin: 0; color: #64748b; font-size: 12px; }
+          .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 20px; }
+          .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+          .meta-item strong { display: block; color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+          .meta-item span { color: #0f172a; font-weight: 600; font-size: 14px; }
+          .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+          .badge-graded { background: #dcfce7; color: #166534; }
+          .badge-forfeited { background: #ffedd5; color: #9a3412; }
+          .badge-pending { background: #fef9c3; color: #854d0e; }
+          .section-title { font-size: 13px; font-weight: 700; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin: 20px 0 12px 0; text-transform: uppercase; letter-spacing: 0.03em; }
+          .qa-box { border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 12px; page-break-inside: avoid; background: #fff; }
+          .q-header { font-weight: 600; color: #334155; font-size: 11px; margin-bottom: 4px; }
+          .q-text { color: #0f172a; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+          .a-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; font-size: 12px; white-space: pre-wrap; }
+          .eval-tag { margin-top: 6px; font-size: 11px; font-weight: 600; }
+          .eval-correct { color: #16a34a; }
+          .eval-incorrect { color: #dc2626; }
+          .eval-score { color: #2563eb; }
+          .table-proctor { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+          .table-proctor th, .table-proctor td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+          .table-proctor th { background: #f1f5f9; color: #475569; }
+        </style>
+      </head>
+      <body>
+        ${pagesHtml}
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      return toast.error('Pop-up blocked. Please allow pop-ups for this site to view/print PDF reports.');
+    }
+    printWindow.document.write(fullDoc);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 600);
   };
 
   const resetQuestionForm = () => {
@@ -609,62 +965,182 @@ const ExaminerFlow = () => {
             </div>
 
             {selectedAssessmentId && !activeScript && (
-              <div className="admin-table-container">
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Student</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>MCQ Score</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Theory Score</th>
-                      <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scripts.map(s => (
-                      <tr key={s.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '1rem' }}>{s.profiles?.full_name} ({s.profiles?.matriculation_number})</td>
-                        <td style={{ padding: '1rem' }}>
-                          {s.device_info?.includes('FORFEIT') ? (
-                            <span style={{ color: '#f97316', fontWeight: 'bold', fontSize: '0.8rem' }}>⛔ Forfeited</span>
-                          ) : s.is_graded ? 'Graded' : 'Pending Review'}
-                        </td>
-                        <td style={{ padding: '1rem' }}>{s.auto_mcq_score}</td>
-                        <td style={{ padding: '1rem' }}>{s.manual_theory_score}</td>
-                        <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                          <button onClick={() => { setActiveScript(s); setScriptInfractions([]); fetchInfractions(s.candidate_id, selectedAssessmentId); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>Review Script</button>
-                          <button
-                            onClick={() => forfeitStudent(s)}
-                            disabled={forfeitingId === s.id}
-                            className="btn-premium"
-                            title="Mark student as forfeited — score set to zero"
-                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#fb923c', borderColor: 'rgba(251,146,60,0.35)', opacity: forfeitingId === s.id ? 0.5 : 1 }}
-                          >
-                            {forfeitingId === s.id ? 'Forfeiting...' : '⛔ Forfeit'}
-                          </button>
-                          <button
-                            onClick={() => setConfirmDeleteScript(s)}
-                            disabled={deletingScriptId === s.id}
-                            className="btn-premium"
-                            title="Permanently delete this student's exam record"
-                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.35)', opacity: deletingScriptId === s.id ? 0.5 : 1 }}
-                          >
-                            {deletingScriptId === s.id ? 'Deleting...' : '🗑️ Delete Record'}
-                          </button>
-                        </td>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem', background: 'var(--bg-surface-solid)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                    {selectedScriptIds.length > 0 ? (
+                      <span style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }}>✓ {selectedScriptIds.length} student(s) selected</span>
+                    ) : (
+                      <span>Total Submissions: <strong style={{ color: 'var(--text-ivory)' }}>{scripts.length}</strong></span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => {
+                        const target = selectedScriptIds.length > 0 
+                          ? scripts.filter(s => selectedScriptIds.includes(s.id))
+                          : scripts;
+                        exportExamPDF(target);
+                      }}
+                      disabled={scripts.length === 0}
+                      className="btn-premium"
+                      title="Export complete exam transcript with questions, answers, and scores as PDF"
+                      style={{ fontSize: '0.82rem', padding: '0.45rem 0.9rem', color: '#f43f5e', borderColor: 'rgba(244,63,94,0.4)', opacity: scripts.length === 0 ? 0.5 : 1 }}
+                    >
+                      📄 Export PDF ({selectedScriptIds.length > 0 ? `${selectedScriptIds.length} Selected` : 'All'})
+                    </button>
+                    <button
+                      onClick={() => {
+                        const target = selectedScriptIds.length > 0 
+                          ? scripts.filter(s => selectedScriptIds.includes(s.id))
+                          : scripts;
+                        exportExamRecords(target);
+                      }}
+                      disabled={scripts.length === 0}
+                      className="btn-premium"
+                      title="Export exam scores and responses to CSV"
+                      style={{ fontSize: '0.82rem', padding: '0.45rem 0.9rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.4)', opacity: scripts.length === 0 ? 0.5 : 1 }}
+                    >
+                      📊 Export CSV ({selectedScriptIds.length > 0 ? `${selectedScriptIds.length} Selected` : 'All'})
+                    </button>
+                    <button
+                      onClick={() => {
+                        const target = selectedScriptIds.length > 0 
+                          ? scripts.filter(s => selectedScriptIds.includes(s.id))
+                          : scripts;
+                        exportProctoringRecords(target);
+                      }}
+                      disabled={scripts.length === 0}
+                      className="btn-premium"
+                      title="Export proctoring logs, IP, geolocation, and device metadata to CSV"
+                      style={{ fontSize: '0.82rem', padding: '0.45rem 0.9rem', color: '#a78bfa', borderColor: 'rgba(167,139,250,0.4)', opacity: scripts.length === 0 ? 0.5 : 1 }}
+                    >
+                      🛡️ Export Proctoring ({selectedScriptIds.length > 0 ? `${selectedScriptIds.length} Selected` : 'All'})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="admin-table-container">
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <th style={{ padding: '1rem', width: '40px' }}>
+                          <input
+                            type="checkbox"
+                            checked={scripts.length > 0 && selectedScriptIds.length === scripts.length}
+                            onChange={toggleSelectAllScripts}
+                            title="Select all / Deselect all"
+                            style={{ accentColor: 'var(--accent-gold)', width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                        </th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Student</th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>MCQ Score</th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Theory Score</th>
+                        <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Actions</th>
                       </tr>
-                    ))}
-                    {scripts.length === 0 && <tr><td colSpan="5" style={{ padding: '1rem', textAlign: 'center' }}>No submissions yet.</td></tr>}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {scripts.map(s => (
+                        <tr key={s.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: selectedScriptIds.includes(s.id) ? 'rgba(197,160,89,0.06)' : 'transparent' }}>
+                          <td style={{ padding: '1rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedScriptIds.includes(s.id)}
+                              onChange={() => toggleSelectScript(s.id)}
+                              style={{ accentColor: 'var(--accent-gold)', width: '16px', height: '16px', cursor: 'pointer' }}
+                            />
+                          </td>
+                          <td style={{ padding: '1rem' }}>{s.profiles?.full_name} ({s.profiles?.matriculation_number})</td>
+                          <td style={{ padding: '1rem' }}>
+                            {s.device_info?.includes('FORFEIT') ? (
+                              <span style={{ color: '#f97316', fontWeight: 'bold', fontSize: '0.8rem' }}>⛔ Forfeited</span>
+                            ) : s.is_graded ? 'Graded' : 'Pending Review'}
+                          </td>
+                          <td style={{ padding: '1rem' }}>{s.auto_mcq_score}</td>
+                          <td style={{ padding: '1rem' }}>{s.manual_theory_score}</td>
+                          <td style={{ padding: '1rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button onClick={() => { setActiveScript(s); setScriptInfractions([]); fetchInfractions(s.candidate_id, selectedAssessmentId); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem' }}>Review</button>
+                            <button
+                              onClick={() => exportExamPDF([s])}
+                              className="btn-premium"
+                              title="Export this student's exam transcript with questions and answers as PDF"
+                              style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: '#f43f5e', borderColor: 'rgba(244,63,94,0.35)' }}
+                            >
+                              📄 PDF
+                            </button>
+                            <button
+                              onClick={() => exportExamRecords([s])}
+                              className="btn-premium"
+                              title="Export this student's exam score to CSV"
+                              style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.35)' }}
+                            >
+                              📊 CSV
+                            </button>
+                            <button
+                              onClick={() => exportProctoringRecords([s])}
+                              className="btn-premium"
+                              title="Export this student's proctoring log to CSV"
+                              style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: '#a78bfa', borderColor: 'rgba(167,139,250,0.35)' }}
+                            >
+                              🛡️ Proctor
+                            </button>
+                            <button
+                              onClick={() => forfeitStudent(s)}
+                              disabled={forfeitingId === s.id}
+                              className="btn-premium"
+                              title="Mark student as forfeited — score set to zero"
+                              style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: '#fb923c', borderColor: 'rgba(251,146,60,0.35)', opacity: forfeitingId === s.id ? 0.5 : 1 }}
+                            >
+                              {forfeitingId === s.id ? 'Forfeiting...' : '⛔ Forfeit'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteScript(s)}
+                              disabled={deletingScriptId === s.id}
+                              className="btn-premium"
+                              title="Permanently delete this student's exam record"
+                              style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.35)', opacity: deletingScriptId === s.id ? 0.5 : 1 }}
+                            >
+                              {deletingScriptId === s.id ? 'Deleting...' : '🗑️ Delete'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {scripts.length === 0 && <tr><td colSpan="6" style={{ padding: '1rem', textAlign: 'center' }}>No submissions yet.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
             {activeScript && (
               <div style={{ background: 'var(--bg-surface-solid)', padding: '2rem', borderRadius: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <h3 style={{ color: 'var(--accent-gold)' }}>Script Review: {activeScript.profiles?.full_name}</h3>
-                  <button onClick={() => setActiveScript(null)} className="btn-premium secondary" style={{ padding: '0.4rem 0.8rem' }}>Back to List</button>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => exportExamPDF([activeScript])}
+                      className="btn-premium"
+                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', color: '#f43f5e', borderColor: 'rgba(244,63,94,0.4)' }}
+                    >
+                      📄 Export PDF Transcript
+                    </button>
+                    <button
+                      onClick={() => exportExamRecords([activeScript])}
+                      className="btn-premium"
+                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.4)' }}
+                    >
+                      📊 Export Exam CSV
+                    </button>
+                    <button
+                      onClick={() => exportProctoringRecords([activeScript])}
+                      className="btn-premium"
+                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', color: '#a78bfa', borderColor: 'rgba(167,139,250,0.4)' }}
+                    >
+                      🛡️ Export Proctoring CSV
+                    </button>
+                    <button onClick={() => setActiveScript(null)} className="btn-premium secondary" style={{ padding: '0.4rem 0.8rem' }}>Back to List</button>
+                  </div>
                 </div>
 
                 {(activeScript.device_info || activeScript.ip_address) && (

@@ -137,10 +137,27 @@ CREATE POLICY "Examiners can delete assessments" ON public.assessments FOR DELET
   (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
 );
 
+-- SECURITY DEFINER Helper Function for RLS Role Checking
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS public.user_role
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$ LANGUAGE sql STABLE;
+
+GRANT EXECUTE ON FUNCTION public.get_user_role() TO anon, authenticated;
+
 -- Questions
 ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Questions viewable if assessment is open" ON public.questions FOR SELECT USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner') OR
+DROP POLICY IF EXISTS "Questions viewable if assessment is open" ON public.questions;
+DROP POLICY IF EXISTS "Questions viewable by staff or students of open assessment" ON public.questions;
+DROP POLICY IF EXISTS "Examiners can insert questions" ON public.questions;
+DROP POLICY IF EXISTS "Examiners can update questions" ON public.questions;
+DROP POLICY IF EXISTS "Examiners can delete questions" ON public.questions;
+
+CREATE POLICY "Questions viewable by staff or students of open assessment" ON public.questions FOR SELECT USING (
+  public.get_user_role() IN ('superadmin', 'examiner') OR
   (EXISTS (
       SELECT 1 FROM public.assessments a 
       WHERE a.id = questions.assessment_id AND a.is_open = true 
@@ -149,30 +166,34 @@ CREATE POLICY "Questions viewable if assessment is open" ON public.questions FOR
 );
 
 CREATE POLICY "Examiners can insert questions" ON public.questions FOR INSERT WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+  public.get_user_role() IN ('superadmin', 'examiner')
 );
 
 CREATE POLICY "Examiners can update questions" ON public.questions FOR UPDATE USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+  public.get_user_role() IN ('superadmin', 'examiner')
+) WITH CHECK (
+  public.get_user_role() IN ('superadmin', 'examiner')
 );
 
 CREATE POLICY "Examiners can delete questions" ON public.questions FOR DELETE USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner')
+  public.get_user_role() IN ('superadmin', 'examiner')
 );
 
 -- Candidate Scripts
 ALTER TABLE public.candidate_scripts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Examiners delete scripts" ON public.candidate_scripts;
 CREATE POLICY "Candidates manage own scripts" ON public.candidate_scripts FOR INSERT WITH CHECK (auth.uid() = candidate_id);
 CREATE POLICY "Candidates view own scripts" ON public.candidate_scripts FOR SELECT USING (auth.uid() = candidate_id);
-CREATE POLICY "Examiners view all scripts" ON public.candidate_scripts FOR SELECT USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
-CREATE POLICY "Examiners rate scripts" ON public.candidate_scripts FOR UPDATE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
-CREATE POLICY "Examiners delete scripts" ON public.candidate_scripts FOR DELETE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners view all scripts" ON public.candidate_scripts FOR SELECT USING (public.get_user_role() IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners rate scripts" ON public.candidate_scripts FOR UPDATE USING (public.get_user_role() IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners delete scripts" ON public.candidate_scripts FOR DELETE USING (public.get_user_role() IN ('superadmin', 'examiner'));
 
 -- Infraction Logs
 ALTER TABLE public.infraction_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Examiners delete infractions" ON public.infraction_logs;
 CREATE POLICY "Candidates insert infractions" ON public.infraction_logs FOR INSERT WITH CHECK (auth.uid() = candidate_id);
-CREATE POLICY "Examiners view infractions" ON public.infraction_logs FOR SELECT USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
-CREATE POLICY "Examiners delete infractions" ON public.infraction_logs FOR DELETE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners view infractions" ON public.infraction_logs FOR SELECT USING (public.get_user_role() IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners delete infractions" ON public.infraction_logs FOR DELETE USING (public.get_user_role() IN ('superadmin', 'examiner'));
 
 -- Academic Years
 ALTER TABLE public.academic_years ENABLE ROW LEVEL SECURITY;
