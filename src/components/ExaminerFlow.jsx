@@ -307,10 +307,14 @@ const ExaminerFlow = () => {
         payload.correct_answer = null;
       }
 
-      const { error } = await supabase.from('questions').update(payload).eq('id', editingQuestion.id);
+      const { data, error } = await supabase.from('questions').update(payload).eq('id', editingQuestion.id).select();
       if (error) return toast.error(error.message);
+      if (!data || data.length === 0) {
+        return toast.error('Failed to update question: Permission denied or record not found');
+      }
       toast.success('Question updated');
-      setQuestions(questions.map(q => q.id === editingQuestion.id ? { ...q, ...payload } : q));
+      const updatedItem = data[0];
+      setQuestions(questions.map(q => q.id === editingQuestion.id ? updatedItem : q));
       resetQuestionForm();
     } else {
       const newSeq = questions.length + 1;
@@ -331,17 +335,20 @@ const ExaminerFlow = () => {
       if (error) return toast.error(error.message);
       toast.success('Question added');
       setQuestions([...questions, data]);
-      setQuestionText('');
+      resetQuestionForm();
     }
   };
 
   const startEditQuestion = (question) => {
     setEditingQuestion(question);
     setQType(question.q_type);
-    setQuestionText(question.question_text);
-    setPoints(question.points);
+    setQuestionText(question.question_text || '');
+    setPoints(question.points || 5);
     if (question.q_type === 'mcq') {
-      setOptions(question.options.join(', '));
+      const opts = Array.isArray(question.options)
+        ? question.options.join(', ')
+        : (typeof question.options === 'string' ? question.options : 'Option A, Option B, Option C, Option D');
+      setOptions(opts);
       setCorrectAnswer(question.correct_answer || '');
     } else {
       setOptions('Option A, Option B, Option C, Option D');
@@ -351,11 +358,14 @@ const ExaminerFlow = () => {
 
   const deleteQuestion = async (id) => {
     if (!window.confirm('Delete this question? This cannot be undone.')) return;
-    const { error } = await supabase.from('questions').delete().eq('id', id);
+    const { data, error } = await supabase.from('questions').delete().eq('id', id).select();
     if (error) return toast.error(error.message);
+    if (!data || data.length === 0) {
+      return toast.error('Failed to delete question: Permission denied or record not found');
+    }
     toast.success('Question deleted');
     if (editingQuestion?.id === id) resetQuestionForm();
-    fetchQuestions(selectedAssessmentId);
+    setQuestions(prev => prev.filter(q => q.id !== id));
   };
 
   const saveTheoryGrade = async (scriptId, newScore) => {
@@ -574,7 +584,7 @@ const ExaminerFlow = () => {
                           <div style={{ color: 'var(--text-ivory)', margin: '0.5rem 0' }}>{q.question_text}</div>
                           {q.q_type === 'mcq' && (
                             <div style={{ fontSize: '0.85rem', color: '#aaa' }}>
-                              Options: {q.options.join(' | ')}<br />
+                              Options: {Array.isArray(q.options) ? q.options.join(' | ') : (q.options || '')}<br />
                               <span style={{ color: '#00ff88' }}>Ans: {q.correct_answer}</span>
                             </div>
                           )}
