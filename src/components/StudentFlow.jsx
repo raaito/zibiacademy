@@ -36,6 +36,14 @@ const StudentFlow = () => {
   const [answers, setAnswers] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
 
+  // Blended Exam Category States
+  const [isBlended, setIsBlended] = useState(false);
+  const [categorySequence, setCategorySequence] = useState(['mcq', 'true_false', 'short_essay']);
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState(0);
+  const [completedCategories, setCompletedCategories] = useState([]);
+  const [categoryTimeLeft, setCategoryTimeLeft] = useState(0);
+  let categoryStartRef = React.useRef(null);
+
   // Device / Proctoring metadata captured at exam start
   const [deviceInfo, setDeviceInfo] = useState('');
   const [ipAddress, setIpAddress] = useState('');
@@ -86,7 +94,14 @@ const StudentFlow = () => {
   const saveDraft = () => {
     if (!activeExam || examState !== 'taking_exam') return;
     const draftKey = `zibi_exam_draft_${activeExam.id}`;
-    const draftData = { answers, timeLeft, savedAt: Date.now() };
+    const draftData = {
+      answers,
+      timeLeft,
+      activeCategoryIndex,
+      completedCategories,
+      categoryTimeLeft,
+      savedAt: Date.now()
+    };
     const key = cipherKey(user?.id || '');
     localStorage.setItem(draftKey, encrypt(JSON.stringify(draftData), key));
   };
@@ -116,6 +131,9 @@ const StudentFlow = () => {
     setActiveExam(exam);
     captureDeviceInfo();
 
+    const blended = exam.is_blended || exam.question_type === 'blended';
+    setIsBlended(blended);
+
     // Fetch questions
     const { data } = await supabase.from('questions')
       .select('*')
@@ -123,6 +141,10 @@ const StudentFlow = () => {
       .order('sequence_number', { ascending: true });
 
     if (data) setQuestions(data);
+
+    const defaultSeq = ['mcq', 'true_false', 'short_essay'];
+    setCategorySequence(defaultSeq);
+    const catDurs = exam.category_durations || {};
 
     // Auto-Save: Check for existing draft in local storage
     const draftKey = `zibi_exam_draft_${exam.id}`;
@@ -132,31 +154,60 @@ const StudentFlow = () => {
         const key = cipherKey(user?.id || '');
         const parsed = JSON.parse(decrypt(savedDraft, key));
         setAnswers(parsed.answers || {});
+        setCompletedCategories(parsed.completedCategories || []);
+
+        const catIdx = parsed.activeCategoryIndex || 0;
+        setActiveCategoryIndex(catIdx);
+
         const elapsed = (Date.now() - (parsed.savedAt || Date.now())) / 1000;
-        const remaining = Math.max(0, Math.floor((parsed.timeLeft || exam.duration_minutes * 60) - elapsed));
-        examStartRef.current = Date.now() - ((exam.duration_minutes * 60) - remaining) * 1000;
-        setTimeLeft(remaining);
-        if (remaining > 0) toast.success('Recovered your previous answers and remaining time.');
-        else toast.success('Recovered your previous answers.');
+
+        if (blended) {
+          const currentCatKey = defaultSeq[catIdx] || 'mcq';
+          const secDurSec = (catDurs[currentCatKey] || 10) * 60;
+          const remainingCat = Math.max(0, Math.floor((parsed.categoryTimeLeft || secDurSec) - elapsed));
+          categoryStartRef.current = Date.now() - (secDurSec - remainingCat) * 1000;
+          setCategoryTimeLeft(remainingCat);
+        } else {
+          const remaining = Math.max(0, Math.floor((parsed.timeLeft || exam.duration_minutes * 60) - elapsed));
+          examStartRef.current = Date.now() - ((exam.duration_minutes * 60) - remaining) * 1000;
+          setTimeLeft(remaining);
+        }
+
+        toast.success('Recovered your previous exam section and answers.');
       } catch (err) {
         console.error('Failed to parse draft', err);
         setAnswers({});
-        examStartRef.current = Date.now();
-        setTimeLeft(exam.duration_minutes * 60);
+        setCompletedCategories([]);
+        setActiveCategoryIndex(0);
+        if (blended) {
+          categoryStartRef.current = Date.now();
+          setCategoryTimeLeft((catDurs.mcq || 10) * 60);
+        } else {
+          examStartRef.current = Date.now();
+          setTimeLeft(exam.duration_minutes * 60);
+        }
       }
     } else {
       setAnswers({});
-      examStartRef.current = Date.now();
-      setTimeLeft(exam.duration_minutes * 60);
+      setCompletedCategories([]);
+      setActiveCategoryIndex(0);
+      if (blended) {
+        categoryStartRef.current = Date.now();
+        setCategoryTimeLeft((catDurs.mcq || 10) * 60);
+      } else {
+        examStartRef.current = Date.now();
+        setTimeLeft(exam.duration_minutes * 60);
+      }
     }
 
+    setCurrentQuestionIndex(0);
     setExamState('taking_exam');
   };
 
   // Auto-Save: Sync to local storage every time answers or timer change
   useEffect(() => {
     saveDraft();
-  }, [answers, examState, activeExam]);
+  }, [answers, examState, activeExam, activeCategoryIndex, completedCategories]);
 
   // Also save draft on beforeunload (tab close / navigation)
   useEffect(() => {
@@ -164,7 +215,7 @@ const StudentFlow = () => {
     const handleBeforeUnloadDraft = () => saveDraft();
     window.addEventListener('beforeunload', handleBeforeUnloadDraft);
     return () => window.removeEventListener('beforeunload', handleBeforeUnloadDraft);
-  }, [examState, answers, activeExam, timeLeft]);
+  }, [examState, answers, activeExam, timeLeft, activeCategoryIndex, categoryTimeLeft]);
 
   const infractionQueue = React.useRef([]);
   const infractionRetrying = React.useRef(false);
@@ -185,7 +236,7 @@ const StudentFlow = () => {
     if (!activeExam || !user) return;
     const qNum = currentQuestionIndex + 1;
     const totalQs = questions.length;
-    const timeRemaining = formatTime(timeLeft);
+    const timeRemaining = formatTime(isBlended ? categoryTimeLeft : timeLeft);
     const enriched = `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
     const payload = {
       candidate_id: user.id,
@@ -293,22 +344,71 @@ const StudentFlow = () => {
       document.body.style.userSelect = 'auto';
       document.body.style.webkitUserSelect = 'auto';
     };
-  }, [examState, activeExam, currentQuestionIndex, questions.length, timeLeft]);
+  }, [examState, activeExam, currentQuestionIndex, questions.length, timeLeft, categoryTimeLeft, isBlended]);
+
+  const advanceCategoryOrSubmit = (isManual = false) => {
+    const currentCatKey = categorySequence[activeCategoryIndex];
+    const newCompleted = [...completedCategories, currentCatKey];
+    setCompletedCategories(newCompleted);
+
+    const nextIndex = activeCategoryIndex + 1;
+    if (nextIndex < categorySequence.length) {
+      const nextCatKey = categorySequence[nextIndex];
+      const catDurs = activeExam?.category_durations || {};
+      const nextDurSec = (catDurs[nextCatKey] || 10) * 60;
+
+      setActiveCategoryIndex(nextIndex);
+      categoryStartRef.current = Date.now();
+      setCategoryTimeLeft(nextDurSec);
+      setCurrentQuestionIndex(0);
+
+      const catNames = { mcq: 'Multiple Choice (MCQ)', true_false: 'True or False', short_essay: 'Short Essay' };
+      if (isManual) {
+        toast.success(`Category locked! Advanced to Section ${nextIndex + 1}: ${catNames[nextCatKey]}`);
+      } else {
+        toast.success(`⏰ Time expired for ${catNames[currentCatKey]}! Auto-saved and advanced to Section ${nextIndex + 1}: ${catNames[nextCatKey]}`);
+      }
+    } else {
+      toast.success('⏰ Final section timer completed! Auto-submitting assessment...');
+      submitExam(true);
+    }
+  };
 
   // Timer (epoch-based to prevent drift)
   useEffect(() => {
     if (examState !== 'taking_exam') return;
-    const tick = () => {
-      if (!examStartRef.current) return;
-      const elapsed = Math.floor((Date.now() - examStartRef.current) / 1000);
-      const remaining = Math.max(0, (activeExam?.duration_minutes || 0) * 60 - elapsed);
-      setTimeLeft(remaining);
-      if (remaining <= 0) submitExam(true);
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [examState]);
+
+    if (isBlended) {
+      const tickCategory = () => {
+        if (!categoryStartRef.current) return;
+        const catDurs = activeExam?.category_durations || {};
+        const currentCatKey = categorySequence[activeCategoryIndex] || 'mcq';
+        const sectionDurSec = (catDurs[currentCatKey] || 10) * 60;
+        const elapsed = Math.floor((Date.now() - categoryStartRef.current) / 1000);
+        const remaining = Math.max(0, sectionDurSec - elapsed);
+        setCategoryTimeLeft(remaining);
+
+        if (remaining <= 0) {
+          advanceCategoryOrSubmit(false);
+        }
+      };
+
+      tickCategory();
+      const interval = setInterval(tickCategory, 1000);
+      return () => clearInterval(interval);
+    } else {
+      const tick = () => {
+        if (!examStartRef.current) return;
+        const elapsed = Math.floor((Date.now() - examStartRef.current) / 1000);
+        const remaining = Math.max(0, (activeExam?.duration_minutes || 0) * 60 - elapsed);
+        setTimeLeft(remaining);
+        if (remaining <= 0) submitExam(true);
+      };
+      tick();
+      const interval = setInterval(tick, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [examState, isBlended, activeCategoryIndex]);
 
   const submitExam = async (isAutoSubmit = false) => {
     if (!activeExam || !user) return;
@@ -321,7 +421,7 @@ const StudentFlow = () => {
     }
 
     if (!isAutoSubmit) {
-      const unanswered = questions.filter(q => !answers[q.id] || answers[q.id].trim() === '');
+      const unanswered = questions.filter(q => !answers[q.id] || String(answers[q.id]).trim() === '');
       if (unanswered.length > 0 && !window.confirm(`You have ${unanswered.length} unanswered question(s). Submit anyway?`)) {
         return;
       }
@@ -329,14 +429,20 @@ const StudentFlow = () => {
 
     let mcqScore = 0;
     let totalPossible = 0;
+    let hasEssay = false;
     const questionScores = {};
+
     questions.forEach(q => {
       totalPossible += q.points;
-      if (q.q_type === 'mcq') {
-        const isCorrect = answers[q.id] === q.correct_answer;
+      if (q.q_type === 'mcq' || q.q_type === 'true_false') {
+        const studentAns = String(answers[q.id] || '').trim().toLowerCase();
+        const correctAns = String(q.correct_answer || '').trim().toLowerCase();
+        const isCorrect = studentAns === correctAns;
         const pts = isCorrect ? q.points : 0;
         questionScores[q.id] = pts;
         mcqScore += pts;
+      } else if (q.q_type === 'short_essay' || q.q_type === 'theory') {
+        hasEssay = true;
       }
     });
 
@@ -347,7 +453,7 @@ const StudentFlow = () => {
       auto_mcq_score: mcqScore,
       total_possible_score: totalPossible,
       question_scores: questionScores,
-      is_graded: false,
+      is_graded: !hasEssay,
       device_info: deviceInfo,
       ip_address: ipAddress,
       location_lat: locationCoords !== null ? locationCoords.lat : null,
@@ -591,126 +697,280 @@ const StudentFlow = () => {
 
         {examState === 'taking_exam' && activeExam && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1.5rem', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}>
               <div>
-                <h3 style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-heading)', marginBottom: '0.25rem' }}>{activeExam.course_name} ({activeExam.course_code})</h3>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Proctoring Engine: <span style={{ color: '#4ade80' }}>Active & Recording</span></span>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <h3 style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-heading)', margin: 0 }}>{activeExam.course_name} ({activeExam.course_code})</h3>
+                  {isBlended && (
+                    <span style={{ background: 'rgba(212,175,55,0.2)', color: 'var(--accent-gold)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                      Blended Exam
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Proctoring Engine: <span style={{ color: '#4ade80' }}>Active &amp; Recording</span></span>
                 {activeExam.instructions && (
                   <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(197,160,89,0.08)', border: '1px solid var(--border-focus)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
                     <strong style={{ color: 'var(--accent-gold)' }}>Instructions:</strong> {activeExam.instructions}
                   </div>
                 )}
               </div>
-              <div style={{ textAlign: 'right', minWidth: '120px' }}>
-                <span style={{ display: 'block', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Time Remaining</span>
-                <span style={{ fontSize: '2rem', fontFamily: 'var(--font-heading)', color: timeLeft < 300 ? '#ef4444' : 'var(--text-ivory)' }}>{formatTime(timeLeft)}</span>
+              <div style={{ textAlign: 'right', minWidth: '150px', background: 'rgba(0,0,0,0.3)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ display: 'block', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                  {isBlended ? 'Active Section Timer' : 'Total Time Remaining'}
+                </span>
+                <span style={{ fontSize: '2rem', fontFamily: 'var(--font-heading)', color: (isBlended ? categoryTimeLeft : timeLeft) < 180 ? '#ef4444' : 'var(--text-ivory)' }}>
+                  {formatTime(isBlended ? categoryTimeLeft : timeLeft)}
+                </span>
               </div>
             </div>
 
-            {questions.length > 0 ? (
-              <div style={{ display: 'flex', gap: '2rem', flexDirection: 'column' }}>
-                {/* Question Navigation */}
-                <div style={{ width: '100%', flexShrink: 0, overflowX: 'auto' }}>
-                  <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '0.5rem', paddingBottom: '0.5rem' }}>
-                    {questions.map((q, idx) => {
-                      const isAns = answers[q.id] !== undefined && answers[q.id] !== '';
-                      return (
-                        <div
-                          key={q.id}
-                          onClick={() => setCurrentQuestionIndex(idx)}
-                          style={{
-                            width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            background: currentQuestionIndex === idx ? 'var(--accent-gold)' : (isAns ? 'var(--bg-surface-hover)' : 'var(--bg-surface-solid)'),
-                            color: currentQuestionIndex === idx ? 'var(--bg-obsidian)' : (isAns ? 'var(--accent-gold)' : 'var(--text-ivory)'),
-                            border: `1px solid ${isAns ? 'var(--accent-gold)' : 'var(--border-subtle)'}`,
-                            borderRadius: '4px', cursor: 'pointer', fontWeight: currentQuestionIndex === idx ? 'bold' : 'normal',
-                            transition: 'all 0.2s'
-                          }}>
-                          {idx + 1}
-                        </div>
-                      )
-                    })}
-                  </div>
+            {/* ── Blended Category Progress Bar ── */}
+            {isBlended && (
+              <div style={{ marginBottom: '2rem', background: 'var(--bg-surface-solid)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-focus)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>
+                  Exam Section Progress &amp; Timing
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                  {[
+                    { key: 'mcq', label: 'Section 1: MCQ', duration: activeExam.category_durations?.mcq || 0 },
+                    { key: 'true_false', label: 'Section 2: True or False', duration: activeExam.category_durations?.true_false || 0 },
+                    { key: 'short_essay', label: 'Section 3: Short Essay', duration: activeExam.category_durations?.short_essay || 0 }
+                  ].map((cat, idx) => {
+                    const isDone = completedCategories.includes(cat.key);
+                    const isActive = activeCategoryIndex === idx;
+                    const isUpcoming = !isDone && !isActive;
 
-                {/* Active Question */}
-                <div style={{ flex: 1, background: 'var(--bg-surface-solid)', padding: '1.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                  {questions[currentQuestionIndex] && (
-                    <>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <h4 style={{ color: 'var(--accent-gold)' }}>Question {currentQuestionIndex + 1} ({questions[currentQuestionIndex].q_type.toUpperCase()})</h4>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{questions[currentQuestionIndex].points} Points</span>
-                      </div>
-                      <p style={{ color: 'var(--text-ivory)', marginBottom: '1.5rem', lineHeight: '1.6', fontSize: '1.05rem' }}>
-                        {questions[currentQuestionIndex].question_text}
-                      </p>
-
-                      {questions[currentQuestionIndex].q_type === 'theory' ? (
-                        <textarea
-                          placeholder="Type your answer here."
-                          value={answers[questions[currentQuestionIndex].id] || ''}
-                          onChange={(e) => handleAnswerChange(questions[currentQuestionIndex].id, e.target.value)}
-                          style={{ width: '100%', minHeight: '200px', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '1rem', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.95rem', resize: 'vertical', outline: 'none' }}
-                          onFocus={(e) => e.target.style.borderColor = 'var(--border-focus)'}
-                          onBlur={(e) => e.target.style.borderColor = 'var(--border-subtle)'}
-                        />
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                          {questions[currentQuestionIndex].options?.map((opt, i) => (
-                            <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--bg-obsidian)', padding: '1rem', borderRadius: '4px', border: answers[questions[currentQuestionIndex].id] === opt ? '1px solid var(--accent-gold)' : '1px solid var(--border-subtle)', cursor: 'pointer' }}>
-                              <input
-                                type="radio"
-                                name={`q-${questions[currentQuestionIndex].id}`}
-                                value={opt}
-                                checked={answers[questions[currentQuestionIndex].id] === opt}
-                                onChange={(e) => handleAnswerChange(questions[currentQuestionIndex].id, e.target.value)}
-                                style={{ accentColor: 'var(--accent-gold)' }}
-                              />
-                              <span style={{ color: 'var(--text-ivory)', flex: 1 }}>{opt}</span>
-                            </label>
-                          ))}
+                    return (
+                      <div
+                        key={cat.key}
+                        style={{
+                          padding: '0.75rem 1rem',
+                          borderRadius: '6px',
+                          border: isActive ? '2px solid var(--accent-gold)' : (isDone ? '1px solid #10b981' : '1px solid var(--border-subtle)'),
+                          background: isActive ? 'rgba(212,175,55,0.12)' : (isDone ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)'),
+                          color: isActive ? 'var(--accent-gold)' : (isDone ? '#34d399' : 'var(--text-muted)'),
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                          <span>{cat.label}</span>
+                          <span style={{ fontSize: '0.7rem' }}>
+                            {isDone ? '🔒 Locked' : (isActive ? '⚡ Active' : '⏳ Upcoming')}
+                          </span>
                         </div>
-                      )}
-
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', marginTop: '2rem' }}>
-                        <button
-                          className="btn-premium"
-                          disabled={currentQuestionIndex === 0}
-                          onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
-                          style={{ flex: '1 1 auto', textAlign: 'center', opacity: currentQuestionIndex === 0 ? 0.5 : 1 }}
-                        >
-                          Previous
-                        </button>
-                        {currentQuestionIndex < questions.length - 1 && (
-                          <button
-                            className="btn-premium primary"
-                            onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
-                            style={{ flex: '1 1 auto', textAlign: 'center' }}
-                          >
-                            Next Question
-                          </button>
-                        )}
+                        <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                          Time Limit: {cat.duration} Minutes
+                        </div>
                       </div>
-                    </>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
-            ) : (
-              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No questions available for this assessment yet.</div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '3rem', padding: '0 1rem' }}>
-              <button
-                className="btn-premium"
-                style={{ borderColor: '#ef4444', color: '#ef4444', width: '100%', maxWidth: '300px' }}
-                onClick={() => {
-                  if (window.confirm("Are you sure you want to submit? You cannot return to this exam.")) {
-                    submitExam();
-                  }
-                }}
-              >
-                Submit Final Exam
-              </button>
+            {(() => {
+              // Filter questions by active category if blended exam
+              const activeCatKey = isBlended ? categorySequence[activeCategoryIndex] : null;
+              const displayQuestions = isBlended ? questions.filter(q => {
+                if (activeCatKey === 'mcq') return q.q_type === 'mcq';
+                if (activeCatKey === 'true_false') return q.q_type === 'true_false';
+                if (activeCatKey === 'short_essay') return q.q_type === 'short_essay' || q.q_type === 'theory';
+                return true;
+              }) : questions;
+
+              if (displayQuestions.length === 0) {
+                return (
+                  <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-surface-solid)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '2rem' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', marginBottom: '1.5rem' }}>
+                      No questions currently assigned to this category section.
+                    </p>
+                    {isBlended && (
+                      <button
+                        className="btn-premium primary"
+                        onClick={() => advanceCategoryOrSubmit(true)}
+                      >
+                        Proceed to Next Category Section &rarr;
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+
+              const safeIndex = Math.min(currentQuestionIndex, displayQuestions.length - 1);
+              const activeQ = displayQuestions[safeIndex];
+
+              return (
+                <div style={{ display: 'flex', gap: '2rem', flexDirection: 'column' }}>
+                  {/* Question Navigation Numbers */}
+                  <div style={{ width: '100%', flexShrink: 0, overflowX: 'auto' }}>
+                    <div style={{ display: 'flex', flexWrap: 'nowrap', gap: '0.5rem', paddingBottom: '0.5rem' }}>
+                      {displayQuestions.map((q, idx) => {
+                        const isAns = answers[q.id] !== undefined && String(answers[q.id]).trim() !== '';
+                        return (
+                          <div
+                            key={q.id}
+                            onClick={() => setCurrentQuestionIndex(idx)}
+                            style={{
+                              width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                              background: safeIndex === idx ? 'var(--accent-gold)' : (isAns ? 'var(--bg-surface-hover)' : 'var(--bg-surface-solid)'),
+                              color: safeIndex === idx ? 'var(--bg-obsidian)' : (isAns ? 'var(--accent-gold)' : 'var(--text-ivory)'),
+                              border: `1px solid ${isAns ? 'var(--accent-gold)' : 'var(--border-subtle)'}`,
+                              borderRadius: '4px', cursor: 'pointer', fontWeight: safeIndex === idx ? 'bold' : 'normal',
+                              transition: 'all 0.2s'
+                            }}>
+                            {idx + 1}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Active Question Panel */}
+                  <div style={{ flex: 1, background: 'var(--bg-surface-solid)', padding: '1.5rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    {activeQ && (
+                      <>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                          <h4 style={{ color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>Question {safeIndex + 1} of {displayQuestions.length}</span>
+                            <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '4px', color: 'var(--text-ivory)' }}>
+                              {activeQ.q_type === 'mcq' ? 'Multiple Choice' : (activeQ.q_type === 'true_false' ? 'True or False' : 'Short Essay')}
+                            </span>
+                          </h4>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{activeQ.points} Points</span>
+                        </div>
+                        
+                        <p style={{ color: 'var(--text-ivory)', marginBottom: '1.5rem', lineHeight: '1.6', fontSize: '1.05rem' }}>
+                          {activeQ.question_text}
+                        </p>
+
+                        {/* Short Essay / Theory input */}
+                        {(activeQ.q_type === 'short_essay' || activeQ.q_type === 'theory') && (
+                          <div>
+                            <textarea
+                              placeholder="Write your short essay response here..."
+                              value={answers[activeQ.id] || ''}
+                              onChange={(e) => handleAnswerChange(activeQ.id, e.target.value)}
+                              style={{ width: '100%', minHeight: '220px', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '1rem', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.95rem', resize: 'vertical', outline: 'none' }}
+                              onFocus={(e) => e.target.style.borderColor = 'var(--border-focus)'}
+                              onBlur={(e) => e.target.style.borderColor = 'var(--border-subtle)'}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              <span>Word count: {(answers[activeQ.id] || '').trim().split(/\s+/).filter(Boolean).length} words</span>
+                              <span style={{ color: '#4ade80' }}>⚡ Draft auto-saved</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* True / False distinct option buttons */}
+                        {activeQ.q_type === 'true_false' && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                            {['True', 'False'].map(optVal => {
+                              const selected = answers[activeQ.id] === optVal;
+                              return (
+                                <button
+                                  key={optVal}
+                                  type="button"
+                                  onClick={() => handleAnswerChange(activeQ.id, optVal)}
+                                  style={{
+                                    padding: '1.25rem',
+                                    borderRadius: '8px',
+                                    fontSize: '1.1rem',
+                                    fontWeight: 'bold',
+                                    background: selected ? 'var(--accent-gold)' : 'var(--bg-obsidian)',
+                                    color: selected ? 'var(--bg-obsidian)' : 'var(--text-ivory)',
+                                    border: selected ? '2px solid var(--accent-gold)' : '1px solid var(--border-subtle)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justify: 'center',
+                                    gap: '0.5rem'
+                                  }}
+                                >
+                                  {optVal === 'True' ? '👍 True' : '👎 False'}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Standard MCQ Options */}
+                        {activeQ.q_type === 'mcq' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            {activeQ.options?.map((opt, i) => (
+                              <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--bg-obsidian)', padding: '1rem', borderRadius: '4px', border: answers[activeQ.id] === opt ? '1px solid var(--accent-gold)' : '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+                                <input
+                                  type="radio"
+                                  name={`q-${activeQ.id}`}
+                                  value={opt}
+                                  checked={answers[activeQ.id] === opt}
+                                  onChange={(e) => handleAnswerChange(activeQ.id, e.target.value)}
+                                  style={{ accentColor: 'var(--accent-gold)' }}
+                                />
+                                <span style={{ color: 'var(--text-ivory)', flex: 1 }}>{opt}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', marginTop: '2rem' }}>
+                          <button
+                            className="btn-premium"
+                            disabled={safeIndex === 0}
+                            onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+                            style={{ flex: '1 1 auto', textAlign: 'center', opacity: safeIndex === 0 ? 0.5 : 1 }}
+                          >
+                            Previous
+                          </button>
+                          {safeIndex < displayQuestions.length - 1 && (
+                            <button
+                              className="btn-premium primary"
+                              onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
+                              style={{ flex: '1 1 auto', textAlign: 'center' }}
+                            >
+                              Next Question
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Section Transition & Final Submission Controls ── */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2.5rem', padding: '0 1rem' }}>
+              {isBlended && activeCategoryIndex < categorySequence.length - 1 ? (
+                <button
+                  className="btn-premium primary"
+                  style={{ width: '100%', maxWidth: '380px', padding: '0.85rem' }}
+                  onClick={() => {
+                    const catNames = { mcq: 'Multiple Choice (MCQ)', true_false: 'True or False', short_essay: 'Short Essay' };
+                    const curName = catNames[categorySequence[activeCategoryIndex]];
+                    const nextName = catNames[categorySequence[activeCategoryIndex + 1]];
+                    if (window.confirm(`Lock ${curName} section and proceed to ${nextName}? You will not be able to return to this section once locked.`)) {
+                      advanceCategoryOrSubmit(true);
+                    }
+                  }}
+                >
+                  🔒 Complete Section &amp; Proceed to Next Category &rarr;
+                </button>
+              ) : (
+                <button
+                  className="btn-premium"
+                  style={{ borderColor: '#ef4444', color: '#ef4444', width: '100%', maxWidth: '320px', padding: '0.85rem' }}
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to submit your final assessment? You cannot return to this exam once submitted.")) {
+                      submitExam();
+                    }
+                  }}
+                >
+                  🏁 Submit Final Assessment
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -718,7 +978,7 @@ const StudentFlow = () => {
         {examState === 'finished' && (
           <div style={{ textAlign: 'center', padding: '4rem 1rem', animation: 'fadeIn 0.5s ease-out' }}>
             <h2 style={{ color: 'var(--accent-gold)', fontSize: '2rem', marginBottom: '1rem', fontFamily: 'var(--font-heading)' }}>Assessment Concluded</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.95rem' }}>Your encrypted script has been securely transmitted to the grading matrix.</p>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.95rem' }}>Your encrypted script has been securely saved and submitted to the evaluation matrix.</p>
 
             <button className="btn-premium primary" style={{ width: '100%', maxWidth: '400px' }} onClick={() => { setExamState('dashboard'); setAnswers({}); setActiveExam(null); }}>Return to Dashboard</button>
           </div>

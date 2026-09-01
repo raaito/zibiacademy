@@ -18,6 +18,9 @@ const ExaminerFlow = () => {
   const [startTime, setStartTime] = useState('');
   const [instructions, setInstructions] = useState('');
   const [questionType, setQuestionType] = useState('mcq');
+  const [mcqDuration, setMcqDuration] = useState(20);
+  const [tfDuration, setTfDuration] = useState(10);
+  const [essayDuration, setEssayDuration] = useState(30);
   const [editingAssessment, setEditingAssessment] = useState(null);
 
   const [selectedAssessmentId, setSelectedAssessmentId] = useState('');
@@ -73,6 +76,9 @@ const ExaminerFlow = () => {
     setStartTime('');
     setInstructions('');
     setQuestionType('mcq');
+    setMcqDuration(20);
+    setTfDuration(10);
+    setEssayDuration(30);
     setSemester('First');
     if (cohorts.length > 0) setCohortId(cohorts[0].id);
     setEditingAssessment(null);
@@ -83,43 +89,41 @@ const ExaminerFlow = () => {
     if (!cohortId) return toast.error('Select an academic cycle');
     
     let parsedStartTime = new Date(startTime).toISOString();
+    const isBlended = questionType === 'blended';
+    const totalDuration = isBlended 
+      ? (Number(mcqDuration) + Number(tfDuration) + Number(essayDuration)) 
+      : Number(duration);
+    
+    const categoryDurations = isBlended 
+      ? { mcq: Number(mcqDuration), true_false: Number(tfDuration), short_essay: Number(essayDuration) }
+      : { mcq: 0, true_false: 0, short_essay: 0 };
+
+    const updatePayload = {
+      course_name: courseName,
+      course_code: courseCode,
+      cohort_id: cohortId,
+      semester: semester,
+      duration_minutes: totalDuration,
+      start_time: parsedStartTime,
+      instructions: instructions,
+      question_type: questionType,
+      is_blended: isBlended,
+      category_durations: categoryDurations
+    };
 
     if (editingAssessment) {
-      const { error } = await supabase.from('assessments').update({
-        course_name: courseName,
-        course_code: courseCode,
-        cohort_id: cohortId,
-        semester: semester,
-        duration_minutes: duration,
-        start_time: parsedStartTime,
-        instructions: instructions,
-        question_type: questionType
-      }).eq('id', editingAssessment.id);
+      const { error } = await supabase.from('assessments').update(updatePayload).eq('id', editingAssessment.id);
 
       if (error) return toast.error(error.message);
       toast.success('Assessment updated successfully');
       setAssessments(assessments.map(a => a.id === editingAssessment.id ? {
         ...a,
-        course_name: courseName,
-        course_code: courseCode,
-        cohort_id: cohortId,
-        semester: semester,
-        duration_minutes: duration,
-        start_time: parsedStartTime,
-        instructions: instructions,
-        question_type: questionType
+        ...updatePayload
       } : a));
       resetAssessmentForm();
     } else {
       const { data, error } = await supabase.from('assessments').insert({
-        course_name: courseName,
-        course_code: courseCode,
-        cohort_id: cohortId,
-        semester: semester,
-        duration_minutes: duration,
-        start_time: parsedStartTime,
-        instructions: instructions,
-        question_type: questionType,
+        ...updatePayload,
         is_open: false,
         created_by: user.id
       }).select().single();
@@ -141,6 +145,11 @@ const ExaminerFlow = () => {
     setStartTime(new Date(assessment.start_time).toISOString().slice(0, 16));
     setInstructions(assessment.instructions || '');
     setQuestionType(assessment.question_type || 'mcq');
+    
+    const catDurs = assessment.category_durations || {};
+    setMcqDuration(catDurs.mcq || 20);
+    setTfDuration(catDurs.true_false || 10);
+    setEssayDuration(catDurs.short_essay || 30);
   };
 
   const deleteAssessment = async (id) => {
@@ -646,18 +655,22 @@ const ExaminerFlow = () => {
     if (!selectedAssessmentId) return toast.error('Select an assessment first');
 
     const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
-    const effectiveQType = selectedAssessment?.question_type || editingQuestion?.q_type || 'mcq';
+    const assessmentType = selectedAssessment?.question_type || 'mcq';
+    const effectiveQType = assessmentType === 'blended' ? qType : (editingQuestion?.q_type || assessmentType);
 
     if (editingQuestion) {
       let payload = {
         question_text: questionText,
         points: Number(points),
+        q_type: effectiveQType
       };
 
-      const qTypeToUse = editingQuestion.q_type || effectiveQType;
-      if (qTypeToUse === 'mcq') {
+      if (effectiveQType === 'mcq') {
         payload.options = typeof options === 'string' ? options.split(',').map(o => o.trim()) : options;
         payload.correct_answer = correctAnswer.trim();
+      } else if (effectiveQType === 'true_false') {
+        payload.options = ['True', 'False'];
+        payload.correct_answer = (correctAnswer || 'True').trim();
       } else {
         payload.options = null;
         payload.correct_answer = null;
@@ -683,6 +696,12 @@ const ExaminerFlow = () => {
       if (effectiveQType === 'mcq') {
         payload.options = typeof options === 'string' ? options.split(',').map(o => o.trim()) : options;
         payload.correct_answer = correctAnswer.trim();
+      } else if (effectiveQType === 'true_false') {
+        payload.options = ['True', 'False'];
+        payload.correct_answer = (correctAnswer || 'True').trim();
+      } else {
+        payload.options = null;
+        payload.correct_answer = null;
       }
 
       const { data, error } = await supabase.from('questions').insert(payload).select().single();
@@ -695,7 +714,7 @@ const ExaminerFlow = () => {
 
   const startEditQuestion = (question) => {
     setEditingQuestion(question);
-    setQType(question.q_type);
+    setQType(question.q_type || 'mcq');
     setQuestionText(question.question_text || '');
     setPoints(question.points || 5);
     if (question.q_type === 'mcq') {
@@ -704,6 +723,9 @@ const ExaminerFlow = () => {
         : (typeof question.options === 'string' ? question.options : 'Option A, Option B, Option C, Option D');
       setOptions(opts);
       setCorrectAnswer(question.correct_answer || '');
+    } else if (question.q_type === 'true_false') {
+      setOptions('True, False');
+      setCorrectAnswer(question.correct_answer || 'True');
     } else {
       setOptions('Option A, Option B, Option C, Option D');
       setCorrectAnswer('Option A');
@@ -784,16 +806,44 @@ const ExaminerFlow = () => {
                 </select>
               </div>
               <div className="input-group">
-                <label>Question Type</label>
+                <label>Question Format</label>
                 <select value={questionType} onChange={e=>setQuestionType(e.target.value)} style={{ padding: '0.8rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', width: '100%' }}>
-                  <option value="mcq">Multiple Choice (MCQ)</option>
-                  <option value="theory">Theory / Essay</option>
+                  <option value="mcq">Multiple Choice (MCQ) Only</option>
+                  <option value="theory">Theory / Essay Only</option>
+                  <option value="blended">✨ Blended Exam (MCQ + T/F + Short Essay)</option>
                 </select>
               </div>
-              <div className="input-group">
-                <label>Duration (Minutes)</label>
-                <input type="number" value={duration} onChange={e=>setDuration(e.target.value)} required min={1} />
-              </div>
+
+              {questionType === 'blended' ? (
+                <div className="input-group" style={{ gridColumn: '1 / -1', background: 'var(--bg-surface-solid)', padding: '1rem', border: '1px border var(--accent-gold)', borderRadius: '6px' }}>
+                  <label style={{ color: 'var(--accent-gold)', fontWeight: '600', marginBottom: '0.8rem', display: 'block' }}>
+                    ⏱️ Blended Section Durations (Minutes per Category)
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>1. MCQ Time (Mins)</label>
+                      <input type="number" value={mcqDuration} onChange={e=>setMcqDuration(Math.max(1, Number(e.target.value)))} min={1} required style={{ width: '100%', padding: '0.6rem', marginTop: '0.3rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>2. True / False Time (Mins)</label>
+                      <input type="number" value={tfDuration} onChange={e=>setTfDuration(Math.max(1, Number(e.target.value)))} min={1} required style={{ width: '100%', padding: '0.6rem', marginTop: '0.3rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>3. Short Essay Time (Mins)</label>
+                      <input type="number" value={essayDuration} onChange={e=>setEssayDuration(Math.max(1, Number(e.target.value)))} min={1} required style={{ width: '100%', padding: '0.6rem', marginTop: '0.3rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '0.8rem', fontSize: '0.85rem', color: 'var(--text-ivory)', borderTop: '1px dashed var(--border-subtle)', paddingTop: '0.5rem' }}>
+                    Total Exam Duration: <strong style={{ color: 'var(--accent-gold)' }}>{Number(mcqDuration) + Number(tfDuration) + Number(essayDuration)} Minutes</strong> (sum of section timers)
+                  </div>
+                </div>
+              ) : (
+                <div className="input-group">
+                  <label>Duration (Minutes)</label>
+                  <input type="number" value={duration} onChange={e=>setDuration(e.target.value)} required min={1} />
+                </div>
+              )}
+
               <div className="input-group">
                 <label>Start Time</label>
                 <input type="datetime-local" value={startTime} onChange={e=>setStartTime(e.target.value)} required />
@@ -804,7 +854,7 @@ const ExaminerFlow = () => {
                   value={instructions}
                   onChange={e=>setInstructions(e.target.value)}
                   rows={4}
-                  placeholder="e.g. Answer all questions. Each theory question must be at least 200 words. No electronic devices allowed."
+                  placeholder="e.g. Answer all questions. Each section has an independent countdown timer."
                   style={{ width: '100%', background: 'var(--bg-surface-solid)', padding: '0.5rem', color: 'var(--text-ivory)', outline: 'none', border: '1px solid var(--border-subtle)', fontFamily: 'var(--font-body)', resize: 'vertical' }}
                 />
               </div>
@@ -826,7 +876,7 @@ const ExaminerFlow = () => {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                     <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Course</th>
-                    <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Duration</th>
+                    <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Type &amp; Duration</th>
                     <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
                     <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Actions</th>
                   </tr>
@@ -834,8 +884,24 @@ const ExaminerFlow = () => {
                 <tbody>
                   {assessments.map(a => (
                     <tr key={a.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <td style={{ padding: '1rem' }}>{a.course_code} - {a.course_name} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>({a.semester})</span></td>
-                      <td style={{ padding: '1rem' }}>{a.duration_minutes}m</td>
+                      <td style={{ padding: '1rem' }}>
+                        <div><strong>{a.course_code}</strong> - {a.course_name} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>({a.semester})</span></div>
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        {a.is_blended || a.question_type === 'blended' ? (
+                          <div>
+                            <span style={{ background: 'rgba(212, 175, 55, 0.2)', color: 'var(--accent-gold)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>Blended Exam</span>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              MCQ: {a.category_durations?.mcq || 0}m | T/F: {a.category_durations?.true_false || 0}m | Essay: {a.category_durations?.short_essay || 0}m (Total: {a.duration_minutes}m)
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}>{a.question_type === 'mcq' ? 'MCQ Only' : 'Theory Only'}</span>
+                            <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>{a.duration_minutes}m</div>
+                          </div>
+                        )}
+                      </td>
                       <td style={{ padding: '1rem' }}>{a.is_open ? 'Open' : 'Closed'}</td>
                       <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <button onClick={() => toggleAssessmentStatus(a.id, a.is_open)} className="btn-premium" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
@@ -879,7 +945,7 @@ const ExaminerFlow = () => {
               <label>Select Assessment</label>
               <select value={selectedAssessmentId} onChange={handleAssessmentSelectForQuestions} style={{ padding: '0.8rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', width: '100%' }}>
                 <option value="">- Please select -</option>
-                {assessments.map(a => <option key={a.id} value={a.id}>{a.course_code}</option>)}
+                {assessments.map(a => <option key={a.id} value={a.id}>{a.course_code} - {a.course_name} ({a.is_blended || a.question_type === 'blended' ? 'Blended' : a.question_type.toUpperCase()})</option>)}
               </select>
             </div>
 
@@ -892,11 +958,37 @@ const ExaminerFlow = () => {
                   <form onSubmit={handleAddQuestion} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {(() => {
                       const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
-                      const lockedType = selectedAssessment?.question_type;
+                      const isBlended = selectedAssessment?.is_blended || selectedAssessment?.question_type === 'blended';
+                      
+                      if (isBlended) {
+                        return (
+                          <div className="input-group">
+                            <label style={{ fontSize: '0.85rem', color: 'var(--accent-gold)' }}>Target Category Section</label>
+                            <select 
+                              value={qType} 
+                              onChange={e => {
+                                setQType(e.target.value);
+                                if (e.target.value === 'true_false') {
+                                  setOptions('True, False');
+                                  setCorrectAnswer('True');
+                                } else if (e.target.value === 'short_essay') {
+                                  setOptions('');
+                                  setCorrectAnswer('');
+                                }
+                              }} 
+                              style={{ padding: '0.6rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', width: '100%' }}
+                            >
+                              <option value="mcq">Category 1: Multiple Choice (MCQ)</option>
+                              <option value="true_false">Category 2: True or False (T/F)</option>
+                              <option value="short_essay">Category 3: Short Essay / Theory</option>
+                            </select>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div style={{ padding: '0.5rem', background: 'var(--bg-surface-solid)', color: 'var(--text-ivory)', borderRadius: '4px', fontSize: '0.9rem', textAlign: 'center', border: '1px solid var(--border-focus)' }}>
-                          Question Type: <strong style={{ color: 'var(--accent-gold)' }}>{lockedType === 'mcq' ? 'Multiple Choice' : 'Theory / Essay'}</strong>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>(set by assessment)</span>
+                          Question Format: <strong style={{ color: 'var(--accent-gold)' }}>{selectedAssessment?.question_type === 'mcq' ? 'Multiple Choice' : 'Theory / Short Essay'}</strong>
                         </div>
                       );
                     })()}
@@ -910,6 +1002,22 @@ const ExaminerFlow = () => {
                         <input type="text" placeholder="Options (comma separated)" value={options} onChange={e=>setOptions(e.target.value)} required style={{ background: 'var(--bg-surface-solid)', padding: '0.5rem', color: 'var(--text-ivory)' }} />
                         <input type="text" placeholder="Exact Correct Option" value={correctAnswer} onChange={e=>setCorrectAnswer(e.target.value)} required style={{ background: 'var(--bg-surface-solid)', padding: '0.5rem', color: 'var(--text-ivory)' }} />
                       </>
+                    )}
+
+                    {qType === 'true_false' && (
+                      <div className="input-group">
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Correct Answer</label>
+                        <select value={correctAnswer} onChange={e=>setCorrectAnswer(e.target.value)} style={{ padding: '0.6rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', width: '100%' }}>
+                          <option value="True">True</option>
+                          <option value="False">False</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {(qType === 'short_essay' || qType === 'theory') && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: '4px' }}>
+                        ℹ️ Short Essay responses are free-form text input by candidates and will be marked manually by examiners during grading.
+                      </div>
                     )}
                     
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -931,12 +1039,28 @@ const ExaminerFlow = () => {
                     <div key={q.id} style={{ background: 'var(--bg-surface-solid)', padding: '1rem', marginBottom: '1rem', borderLeft: '3px solid var(--accent-gold)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Q{i+1}. {q.q_type.toUpperCase()} ({q.points} Pts)</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <span>Q{i+1}. ({q.points} Pts)</span>
+                            <span style={{ background: 'rgba(212,175,55,0.15)', color: 'var(--accent-gold)', padding: '1px 6px', borderRadius: '3px', fontSize: '0.7rem', fontWeight: 'bold' }}>
+                              {q.q_type === 'mcq' ? 'MCQ' : q.q_type === 'true_false' ? 'TRUE/FALSE' : 'SHORT ESSAY'}
+                            </span>
+                          </div>
                           <div style={{ color: 'var(--text-ivory)', margin: '0.5rem 0' }}>{q.question_text}</div>
                           {q.q_type === 'mcq' && (
                             <div style={{ fontSize: '0.85rem', color: '#aaa' }}>
                               Options: {Array.isArray(q.options) ? q.options.join(' | ') : (q.options || '')}<br />
                               <span style={{ color: '#00ff88' }}>Ans: {q.correct_answer}</span>
+                            </div>
+                          )}
+                          {q.q_type === 'true_false' && (
+                            <div style={{ fontSize: '0.85rem', color: '#aaa' }}>
+                              Options: True | False<br />
+                              <span style={{ color: '#00ff88' }}>Ans: {q.correct_answer}</span>
+                            </div>
+                          )}
+                          {(q.q_type === 'short_essay' || q.q_type === 'theory') && (
+                            <div style={{ fontSize: '0.8rem', color: '#94a3b8', italic: 'true' }}>
+                              [Short Essay Response]
                             </div>
                           )}
                         </div>

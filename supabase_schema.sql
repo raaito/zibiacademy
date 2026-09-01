@@ -55,24 +55,28 @@ CREATE TABLE public.assessments (
     duration_minutes INTEGER NOT NULL,
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
     is_open BOOLEAN DEFAULT false,
+    is_hidden BOOLEAN DEFAULT false,
     semester TEXT DEFAULT 'First', -- 'First' or 'Second'
-    question_type TEXT DEFAULT 'mcq', -- 'mcq' or 'theory' - an exam is one type only
+    question_type TEXT DEFAULT 'mcq', -- 'mcq', 'theory', or 'blended'
+    is_blended BOOLEAN DEFAULT false, -- True if assessment contains timed blended sections
+    category_durations JSONB DEFAULT '{"mcq": 0, "true_false": 0, "short_essay": 0}'::jsonb, -- Per-category time limits in minutes
     instructions TEXT DEFAULT '', -- Exam instructions for candidates
     created_by UUID REFERENCES public.profiles(id), -- The Examiner
+    grader_access JSONB DEFAULT '[]'::jsonb, -- Array of examiner UUIDs allowed to grade this exam
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 4. Questions Bank
-CREATE TYPE question_type AS ENUM ('mcq', 'theory');
+CREATE TYPE question_type AS ENUM ('mcq', 'theory', 'true_false', 'short_essay');
 
 CREATE TABLE public.questions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     assessment_id UUID REFERENCES public.assessments(id) ON DELETE CASCADE,
-    q_type question_type NOT NULL,
+    q_type question_type NOT NULL, -- 'mcq', 'theory', 'true_false', 'short_essay'
     question_text TEXT NOT NULL,
     points INTEGER NOT NULL,
-    options JSONB, -- For MCQ (Array of strings)
-    correct_answer TEXT, -- For MCQ validation
+    options JSONB, -- For MCQ or True/False (Array of strings)
+    correct_answer TEXT, -- For MCQ/True_False auto-grading validation
     sequence_number INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
