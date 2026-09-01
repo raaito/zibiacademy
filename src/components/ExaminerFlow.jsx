@@ -98,7 +98,7 @@ const ExaminerFlow = () => {
       ? { mcq: Number(mcqDuration), true_false: Number(tfDuration), short_essay: Number(essayDuration) }
       : { mcq: 0, true_false: 0, short_essay: 0 };
 
-    const updatePayload = {
+    let updatePayload = {
       course_name: courseName,
       course_code: courseCode,
       cohort_id: cohortId,
@@ -112,7 +112,20 @@ const ExaminerFlow = () => {
     };
 
     if (editingAssessment) {
-      const { error } = await supabase.from('assessments').update(updatePayload).eq('id', editingAssessment.id);
+      let { error } = await supabase.from('assessments').update(updatePayload).eq('id', editingAssessment.id);
+
+      if (error && error.message?.includes('category_durations')) {
+        // Fallback for database instances where category_durations column has not been added yet
+        if (!isBlended) {
+          const fallbackPayload = { ...updatePayload };
+          delete fallbackPayload.is_blended;
+          delete fallbackPayload.category_durations;
+          const retry = await supabase.from('assessments').update(fallbackPayload).eq('id', editingAssessment.id);
+          error = retry.error;
+        } else {
+          return toast.error('Database migration required: Please run the SQL migration query in your Supabase SQL Editor to add the category_durations column.', { duration: 6000 });
+        }
+      }
 
       if (error) return toast.error(error.message);
       toast.success('Assessment updated successfully');
@@ -122,11 +135,28 @@ const ExaminerFlow = () => {
       } : a));
       resetAssessmentForm();
     } else {
-      const { data, error } = await supabase.from('assessments').insert({
+      let { data, error } = await supabase.from('assessments').insert({
         ...updatePayload,
         is_open: false,
         created_by: user.id
       }).select().single();
+
+      if (error && error.message?.includes('category_durations')) {
+        if (!isBlended) {
+          const fallbackPayload = { ...updatePayload };
+          delete fallbackPayload.is_blended;
+          delete fallbackPayload.category_durations;
+          const retry = await supabase.from('assessments').insert({
+            ...fallbackPayload,
+            is_open: false,
+            created_by: user.id
+          }).select().single();
+          data = retry.data;
+          error = retry.error;
+        } else {
+          return toast.error('Database migration required: Please run the SQL migration query in your Supabase SQL Editor to add the category_durations column.', { duration: 6000 });
+        }
+      }
 
       if (error) return toast.error(error.message);
       toast.success('Assessment created successfully');
