@@ -38,7 +38,7 @@ const ExaminerFlow = () => {
   const [gradingQuestionsLoading, setGradingQuestionsLoading] = useState(false);
   const [scriptInfractions, setScriptInfractions] = useState([]);
 
-  // Access modal state
+  // Access modal & Unwritten candidates state
   const [accessModal, setAccessModal] = useState(null); // { assessment } | null
   const [allStaff, setAllStaff] = useState([]);
   const [accessLoading, setAccessLoading] = useState(false);
@@ -49,12 +49,84 @@ const ExaminerFlow = () => {
   const [confirmDeleteScript, setConfirmDeleteScript] = useState(null); // script object awaiting delete confirmation
   const [selectedScriptIds, setSelectedScriptIds] = useState([]);
 
+  // Unwritten Candidates Tracker state
+  const [unwrittenCandidates, setUnwrittenCandidates] = useState([]);
+  const [unwrittenLoading, setUnwrittenLoading] = useState(false);
+  const [unwrittenSearch, setUnwrittenSearch] = useState('');
+
   useEffect(() => {
     if (user) {
       fetchCohorts();
       fetchAssessments();
     }
   }, [user]);
+
+  const fetchUnwrittenCandidates = async (assessmentId) => {
+    if (!assessmentId) {
+      setUnwrittenCandidates([]);
+      return;
+    }
+    setUnwrittenLoading(true);
+    const assessment = assessments.find(a => a.id === assessmentId);
+    if (!assessment) {
+      setUnwrittenLoading(false);
+      return;
+    }
+
+    // 1. Fetch all candidate profiles in cohort
+    const { data: cohortProfiles } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'candidate')
+      .eq('cohort_id', assessment.cohort_id)
+      .order('full_name', { ascending: true });
+
+    // 2. Fetch submitted script candidate IDs
+    const { data: scriptsData } = await supabase
+      .from('candidate_scripts')
+      .select('candidate_id')
+      .eq('assessment_id', assessmentId);
+
+    const submittedSet = new Set(scriptsData?.map(s => s.candidate_id) || []);
+
+    // 3. Filter candidates who have NOT written
+    const unwritten = cohortProfiles?.filter(p => !submittedSet.has(p.id)) || [];
+    setUnwrittenCandidates(unwritten);
+    setUnwrittenLoading(false);
+  };
+
+  const handleAssessmentSelectForUnwritten = (e) => {
+    const aid = e.target.value;
+    setSelectedAssessmentId(aid);
+    if (aid) {
+      fetchUnwrittenCandidates(aid);
+    } else {
+      setUnwrittenCandidates([]);
+    }
+  };
+
+  const exportUnwrittenCSV = () => {
+    if (!unwrittenCandidates || unwrittenCandidates.length === 0) {
+      return toast.error('No unwritten candidates to export.');
+    }
+    const assessment = assessments.find(a => a.id === selectedAssessmentId);
+    const courseCode = assessment?.course_code || 'Assessment';
+    
+    const headers = ['Full Name', 'Matriculation Number', 'Email', 'Telephone', 'Program Track', 'Semester', 'Status'];
+    const rows = unwrittenCandidates.map(c => [
+      escapeCSV(c.full_name || 'N/A'),
+      escapeCSV(c.matriculation_number || 'N/A'),
+      escapeCSV(c.email || 'N/A'),
+      escapeCSV(c.telephone || 'N/A'),
+      escapeCSV(c.program_type === 'stretch' ? 'Stretch' : 'Multi-Semester'),
+      escapeCSV(c.semester || 'N/A'),
+      escapeCSV('Exam Not Written')
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    downloadCSV(`Unwritten_Students_${courseCode}_${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
+    toast.success(`Exported ${unwrittenCandidates.length} unwritten student record(s).`);
+  };
 
   const fetchCohorts = async () => {
     const { data } = await supabase.from('academic_years').select('*').order('created_at', { ascending: false });
@@ -796,14 +868,27 @@ const ExaminerFlow = () => {
         </header>
 
         <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem', overflowX: 'auto' }}>
-          {['assessments', 'questions', 'grading'].map(tab => (
+          {[
+            { id: 'assessments', label: 'Assessments' },
+            { id: 'questions', label: 'Questions' },
+            { id: 'grading', label: 'Grading & Submissions' },
+            { id: 'unwritten', label: '⚠️ Pending Candidates (Unwritten)' }
+          ].map(tab => (
             <span
-              key={tab}
-              className={activeTab === tab ? 'active-link' : ''}
-              onClick={() => { setActiveTab(tab); setSelectedAssessmentId(''); setActiveScript(null); resetQuestionForm(); setEditingAssessment(null); resetAssessmentForm(); }}
-              style={{ cursor: 'pointer', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: activeTab === tab ? 'var(--text-ivory)' : 'var(--text-muted)' }}
+              key={tab.id}
+              className={activeTab === tab.id ? 'active-link' : ''}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSelectedAssessmentId('');
+                setActiveScript(null);
+                resetQuestionForm();
+                setEditingAssessment(null);
+                resetAssessmentForm();
+                setUnwrittenCandidates([]);
+              }}
+              style={{ cursor: 'pointer', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: activeTab === tab.id ? 'var(--text-ivory)' : 'var(--text-muted)' }}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab.label}
             </span>
           ))}
         </div>
@@ -1424,6 +1509,111 @@ const ExaminerFlow = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'unwritten' && (
+          <div>
+            <h3 style={{ color: 'var(--text-ivory)', marginBottom: '0.5rem' }}>Pending Candidates Tracker</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              Select an assessment paper to view candidates enrolled in the cohort who have not yet taken or submitted this exam.
+            </p>
+
+            <div className="input-group" style={{ marginBottom: '2rem' }}>
+              <label>Select Assessment Paper</label>
+              <select value={selectedAssessmentId} onChange={handleAssessmentSelectForUnwritten} style={{ padding: '0.8rem', background: 'var(--bg-surface-solid)', border: '1px solid var(--border-focus)', color: 'var(--text-ivory)', width: '100%' }}>
+                <option value="">- Please select -</option>
+                {assessments.map(a => <option key={a.id} value={a.id}>{a.course_code} - {a.course_name} ({a.semester})</option>)}
+              </select>
+            </div>
+
+            {selectedAssessmentId && (
+              <div>
+                {(() => {
+                  const selectedAssessment = assessments.find(a => a.id === selectedAssessmentId);
+                  const filteredList = unwrittenCandidates.filter(c => 
+                    !unwrittenSearch || 
+                    (c.full_name && c.full_name.toLowerCase().includes(unwrittenSearch.toLowerCase())) ||
+                    (c.matriculation_number && c.matriculation_number.toLowerCase().includes(unwrittenSearch.toLowerCase())) ||
+                    (c.email && c.email.toLowerCase().includes(unwrittenSearch.toLowerCase()))
+                  );
+
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'var(--bg-surface-solid)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                        <div>
+                          <h4 style={{ color: 'var(--accent-gold)', margin: '0 0 0.3rem' }}>
+                            {selectedAssessment?.course_code} - {selectedAssessment?.course_name}
+                          </h4>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            Pending Candidates: <strong style={{ color: filteredList.length > 0 ? '#ef4444' : '#10b981' }}>{unwrittenCandidates.length} Student(s) Have Not Written</strong>
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            placeholder="Search candidate name / matric..."
+                            value={unwrittenSearch}
+                            onChange={e => setUnwrittenSearch(e.target.value)}
+                            style={{ padding: '0.5rem 0.8rem', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', borderRadius: '4px', fontSize: '0.85rem' }}
+                          />
+                          <button
+                            className="btn-premium primary"
+                            onClick={exportUnwrittenCSV}
+                            disabled={unwrittenCandidates.length === 0}
+                            style={{ opacity: unwrittenCandidates.length === 0 ? 0.5 : 1, fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                          >
+                            📥 Export Unwritten List (CSV)
+                          </button>
+                        </div>
+                      </div>
+
+                      {unwrittenLoading ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading cohort candidates...</div>
+                      ) : filteredList.length > 0 ? (
+                        <div className="admin-table-container">
+                          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', color: 'var(--text-body)' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Candidate Name</th>
+                                <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Matriculation No.</th>
+                                <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Contact Info</th>
+                                <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Program Track</th>
+                                <th style={{ padding: '1rem', color: 'var(--accent-gold)' }}>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredList.map(c => (
+                                <tr key={c.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                  <td style={{ padding: '1rem', fontWeight: 'bold', color: 'var(--text-ivory)' }}>{c.full_name}</td>
+                                  <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{c.matriculation_number || 'N/A'}</td>
+                                  <td style={{ padding: '1rem', fontSize: '0.85rem' }}>
+                                    <div>{c.email}</div>
+                                    {c.telephone && <div style={{ color: 'var(--text-muted)', marginTop: '2px' }}>📞 {c.telephone}</div>}
+                                  </td>
+                                  <td style={{ padding: '1rem', fontSize: '0.85rem' }}>
+                                    {c.program_type === 'stretch' ? 'Stretch Track' : `Semester ${c.semester || 'First'}`}
+                                  </td>
+                                  <td style={{ padding: '1rem' }}>
+                                    <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '3px 10px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                      ⚠️ Exam Not Written
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-surface-solid)', borderRadius: '6px', color: 'var(--text-muted)' }}>
+                          🎉 All enrolled candidates in this cohort have submitted their paper! No pending students.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

@@ -563,8 +563,19 @@ const StudentFlow = () => {
                             </div>
                             <div style={{ flex: '1 1 auto', maxWidth: '300px', textAlign: 'right' }}>
                               {script ? (
-                                <div style={{ background: 'rgba(0, 255, 136, 0.1)', border: '1px solid #00ff88', color: '#00ff88', padding: '0.75rem', borderRadius: '4px', textAlign: 'center', fontWeight: 'bold' }}>
-                                  {script.is_graded ? `Total Score: ${script.auto_mcq_score + script.manual_theory_score} / ${totalPossible}` : 'Pending Grading'}
+                                <div style={{
+                                  background: script.is_graded ? 'rgba(0, 255, 136, 0.1)' : 'rgba(245, 158, 11, 0.12)',
+                                  border: script.is_graded ? '1px solid #00ff88' : '1px solid #f59e0b',
+                                  color: script.is_graded ? '#00ff88' : '#f59e0b',
+                                  padding: '0.75rem',
+                                  borderRadius: '4px',
+                                  textAlign: 'center',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.85rem'
+                                }}>
+                                  {script.is_graded 
+                                    ? `✅ Final Score: ${(script.auto_mcq_score || 0) + (script.manual_theory_score || 0)} / ${totalPossible}` 
+                                    : '⏳ Pending Evaluation (Short Essays Pending Grading)'}
                                 </div>
                               ) : exam.is_open ? (
                                 <button className="btn-premium primary" style={{ width: '100%' }} onClick={() => setConfirmExam(exam)}>Commence Exam</button>

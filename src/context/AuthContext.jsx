@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user.id, false);
       } else {
         setLoading(false);
       }
@@ -28,7 +28,8 @@ export const AuthProvider = ({ children }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        // Background re-fetch without setting loading=true to prevent unmounting active UI states on tab switch
+        fetchProfile(session.user.id, true);
       } else {
         setProfile(null);
         setLoading(false);
@@ -38,8 +39,10 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId) => {
-    setLoading(true);
+  const fetchProfile = async (userId, isBackground = false) => {
+    if (!isBackground || !profile) {
+      setLoading(true);
+    }
     try {
       const { data, error } = await supabase
         .from('profiles')
