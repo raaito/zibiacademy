@@ -13,6 +13,9 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
 
+  const profileRef = React.useRef(null);
+  profileRef.current = profile;
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -40,7 +43,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const fetchProfile = async (userId, isBackground = false) => {
-    if (!isBackground || !profile) {
+    if (!isBackground || !profileRef.current) {
       setLoading(true);
     }
     try {

@@ -5,7 +5,14 @@ import { toast } from 'react-hot-toast';
 
 const ExaminerFlow = () => {
   const { user, profile } = useAuth();
-  const [activeTab, setActiveTab] = useState('assessments');
+  const [activeTab, setActiveTabState] = useState(() => {
+    return sessionStorage.getItem('zibi_examiner_active_tab') || 'assessments';
+  });
+
+  const setActiveTab = (tab) => {
+    sessionStorage.setItem('zibi_examiner_active_tab', tab);
+    setActiveTabState(tab);
+  };
   
   const [cohorts, setCohorts] = useState([]);
   const [assessments, setAssessments] = useState([]);
