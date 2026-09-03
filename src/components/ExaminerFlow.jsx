@@ -60,6 +60,7 @@ const ExaminerFlow = () => {
   const [unwrittenCandidates, setUnwrittenCandidates] = useState([]);
   const [unwrittenLoading, setUnwrittenLoading] = useState(false);
   const [unwrittenSearch, setUnwrittenSearch] = useState('');
+  const [unwrittenSchool, setUnwrittenSchool] = useState('zibi'); // 'zibi' | 'supernatural'
 
   useEffect(() => {
     if (user) {
@@ -68,7 +69,7 @@ const ExaminerFlow = () => {
     }
   }, [user]);
 
-  const fetchUnwrittenCandidates = async (assessmentId) => {
+  const fetchUnwrittenCandidates = async (assessmentId, schoolFilter) => {
     if (!assessmentId) {
       setUnwrittenCandidates([]);
       return;
@@ -80,13 +81,24 @@ const ExaminerFlow = () => {
       return;
     }
 
-    // 1. Fetch all candidate profiles in cohort
-    const { data: cohortProfiles } = await supabase
+    // 1. Fetch candidate profiles in cohort, filtered by school
+    let query = supabase
       .from('profiles')
       .select('*')
       .eq('role', 'candidate')
       .eq('cohort_id', assessment.cohort_id)
       .order('full_name', { ascending: true });
+
+    // School of Supernatural students have registration_type = 'supernatural'
+    // ZIBI students are everyone else (general, theology, null, etc.)
+    if (schoolFilter === 'supernatural') {
+      query = query.eq('registration_type', 'supernatural');
+    } else {
+      // ZIBI: exclude supernatural students
+      query = query.neq('registration_type', 'supernatural');
+    }
+
+    const { data: cohortProfiles } = await query;
 
     // 2. Fetch submitted script candidate IDs
     const { data: scriptsData } = await supabase
@@ -106,9 +118,17 @@ const ExaminerFlow = () => {
     const aid = e.target.value;
     setSelectedAssessmentId(aid);
     if (aid) {
-      fetchUnwrittenCandidates(aid);
+      fetchUnwrittenCandidates(aid, unwrittenSchool);
     } else {
       setUnwrittenCandidates([]);
+    }
+  };
+
+  const handleUnwrittenSchoolChange = (school) => {
+    setUnwrittenSchool(school);
+    setUnwrittenSearch('');
+    if (selectedAssessmentId) {
+      fetchUnwrittenCandidates(selectedAssessmentId, school);
     }
   };
 
@@ -118,8 +138,9 @@ const ExaminerFlow = () => {
     }
     const assessment = assessments.find(a => a.id === selectedAssessmentId);
     const courseCode = assessment?.course_code || 'Assessment';
-    
-    const headers = ['Full Name', 'Matriculation Number', 'Email', 'Telephone', 'Program Track', 'Semester', 'Status'];
+    const schoolLabel = unwrittenSchool === 'supernatural' ? 'SSN' : 'ZIBI';
+
+    const headers = ['Full Name', 'Matriculation Number', 'Email', 'Telephone', 'Program Track', 'Semester', 'School', 'Status'];
     const rows = unwrittenCandidates.map(c => [
       escapeCSV(c.full_name || 'N/A'),
       escapeCSV(c.matriculation_number || 'N/A'),
@@ -127,11 +148,12 @@ const ExaminerFlow = () => {
       escapeCSV(c.telephone || 'N/A'),
       escapeCSV(c.program_type === 'stretch' ? 'Stretch' : 'Multi-Semester'),
       escapeCSV(c.semester || 'N/A'),
+      escapeCSV(unwrittenSchool === 'supernatural' ? 'School of Supernatural' : 'ZIBI Academy'),
       escapeCSV('Exam Not Written')
     ].join(','));
 
     const csvContent = [headers.join(','), ...rows].join('\n');
-    downloadCSV(`Unwritten_Students_${courseCode}_${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
+    downloadCSV(`Unwritten_${schoolLabel}_${courseCode}_${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
     toast.success(`Exported ${unwrittenCandidates.length} unwritten student record(s).`);
   };
 
@@ -1525,8 +1547,34 @@ const ExaminerFlow = () => {
           <div>
             <h3 style={{ color: 'var(--text-ivory)', marginBottom: '0.5rem' }}>Pending Candidates Tracker</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              Select an assessment paper to view candidates enrolled in the cohort who have not yet taken or submitted this exam.
+              Select a school and an assessment paper to view candidates who have not yet submitted that exam.
             </p>
+
+            {/* ── School Toggle ── */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              {[
+                { id: 'zibi', label: '🏫 ZIBI Academy' },
+                { id: 'supernatural', label: '✨ School of Supernatural' }
+              ].map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => handleUnwrittenSchoolChange(s.id)}
+                  style={{
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: '6px',
+                    fontWeight: 'bold',
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.18s',
+                    border: unwrittenSchool === s.id ? '2px solid var(--accent-gold)' : '1px solid var(--border-subtle)',
+                    background: unwrittenSchool === s.id ? 'rgba(212, 175, 55, 0.15)' : 'var(--bg-surface-solid)',
+                    color: unwrittenSchool === s.id ? 'var(--accent-gold)' : 'var(--text-muted)',
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
 
             <div className="input-group" style={{ marginBottom: '2rem' }}>
               <label>Select Assessment Paper</label>
@@ -1552,10 +1600,15 @@ const ExaminerFlow = () => {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'var(--bg-surface-solid)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
                         <div>
                           <h4 style={{ color: 'var(--accent-gold)', margin: '0 0 0.3rem' }}>
-                            {selectedAssessment?.course_code} - {selectedAssessment?.course_name}
+                            {selectedAssessment?.course_code} — {selectedAssessment?.course_name}
                           </h4>
+                          <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                            School: <strong style={{ color: unwrittenSchool === 'supernatural' ? '#a78bfa' : '#60a5fa' }}>
+                              {unwrittenSchool === 'supernatural' ? 'School of Supernatural' : 'ZIBI Academy'}
+                            </strong>
+                          </span>
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            Pending Candidates: <strong style={{ color: filteredList.length > 0 ? '#ef4444' : '#10b981' }}>{unwrittenCandidates.length} Student(s) Have Not Written</strong>
+                            Pending: <strong style={{ color: unwrittenCandidates.length > 0 ? '#ef4444' : '#10b981' }}>{unwrittenCandidates.length} Student(s) Have Not Written</strong>
                           </span>
                         </div>
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
