@@ -44,6 +44,8 @@ const ExaminerFlow = () => {
   const [gradingQuestions, setGradingQuestions] = useState([]);
   const [gradingQuestionsLoading, setGradingQuestionsLoading] = useState(false);
   const [scriptInfractions, setScriptInfractions] = useState([]);
+  const [evidenceUrls, setEvidenceUrls] = useState({}); // evidence_path -> signed URL
+  const [infractionSeverityFilter, setInfractionSeverityFilter] = useState('all');
 
   // Access modal & Unwritten candidates state
   const [accessModal, setAccessModal] = useState(null); // { assessment } | null
@@ -306,13 +308,38 @@ const ExaminerFlow = () => {
     setGradingQuestionsLoading(false);
   };
 
+  const SEVERITY_RANK = { high: 3, medium: 2, low: 1, info: 0 };
+
   const fetchInfractions = async (candidateId, assessmentId) => {
     const { data } = await supabase.from('infraction_logs')
       .select('*')
       .eq('candidate_id', candidateId)
       .eq('assessment_id', assessmentId)
       .order('logged_at', { ascending: true });
-    if (data) setScriptInfractions(data);
+    if (!data) return;
+    setScriptInfractions(data);
+
+    // Evidence lives in a private bucket — only examiners can mint signed
+    // URLs for it (see storage RLS policies in the proctoring migration),
+    // and each URL is short-lived rather than a permanent public link.
+    const withEvidence = data.filter(inf => inf.evidence_path);
+    if (withEvidence.length === 0) return;
+    const urlMap = {};
+    await Promise.all(withEvidence.map(async (inf) => {
+      const { data: signed } = await supabase.storage
+        .from('proctoring-evidence')
+        .createSignedUrl(inf.evidence_path, 600); // 10 minutes
+      if (signed?.signedUrl) urlMap[inf.evidence_path] = signed.signedUrl;
+    }));
+    setEvidenceUrls(urlMap);
+  };
+
+  const markInfractionReviewed = async (infractionId, note = '') => {
+    const { error } = await supabase.from('infraction_logs')
+      .update({ reviewed: true, reviewer_note: note || null })
+      .eq('id', infractionId);
+    if (error) return toast.error(error.message);
+    setScriptInfractions(prev => prev.map(i => i.id === infractionId ? { ...i, reviewed: true, reviewer_note: note || null } : i));
   };
 
   const toggleAssessmentStatus = async (id, currentStatus) => {
@@ -621,16 +648,16 @@ const ExaminerFlow = () => {
       if (qList && qList.length > 0) {
         qaContent = qList.map((q, qIdx) => {
           const answer = s.answers ? s.answers[q.id] : undefined;
-          const isMcq = q.q_type === 'mcq';
-          const isCorrect = isMcq && answer === q.correct_answer;
+          const isAutoGraded = q.q_type === 'mcq' || q.q_type === 'true_false';
+          const isCorrect = isAutoGraded && String(answer || '').trim().toLowerCase() === String(q.correct_answer || '').trim().toLowerCase();
           const qScore = s.question_scores?.[q.id];
 
           let evalHtml = '';
           if (answer !== undefined && answer !== '') {
-            if (isMcq) {
+            if (isAutoGraded) {
               evalHtml = isCorrect
-                ? `<div class="eval-tag eval-correct">✓ Correct (+${q.points} pts)</div>`
-                : `<div class="eval-tag eval-incorrect">✗ Incorrect &bull; Correct Answer: ${q.correct_answer}</div>`;
+                ? `<div class="eval-tag eval-correct">✓ Correct (+${q.points} / ${q.points} pts)</div>`
+                : `<div class="eval-tag eval-incorrect">✗ Incorrect (0 / ${q.points} pts &bull; Correct Answer: ${q.correct_answer})</div>`;
             } else {
               evalHtml = `<div class="eval-tag eval-score">Score Awarded: ${qScore !== undefined ? qScore : 'Pending'} / ${q.points} pts</div>`;
             }
@@ -1440,8 +1467,8 @@ const ExaminerFlow = () => {
                   <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Student Answers</h4>
                   {gradingQuestions.map((q, idx) => {
                     const answer = activeScript.answers[q.id];
-                    const isMcq = q.q_type === 'mcq';
-                    const isCorrect = isMcq && answer === q.correct_answer;
+                    const isAutoGraded = q.q_type === 'mcq' || q.q_type === 'true_false';
+                    const isCorrect = isAutoGraded && String(answer || '').trim().toLowerCase() === String(q.correct_answer || '').trim().toLowerCase();
                     const currentScore = activeScript.question_scores?.[q.id];
                     return (
                       <div key={q.id} style={{ background: 'var(--bg-obsidian)', padding: '1rem', marginBottom: '1rem', borderLeft: '3px solid var(--accent-gold)', borderRadius: '4px' }}>
@@ -1453,19 +1480,19 @@ const ExaminerFlow = () => {
                         </div>
                         {answer !== undefined && answer !== '' ? (
                           <div style={{
-                            background: isMcq ? (isCorrect ? 'rgba(0,255,136,0.08)' : 'rgba(255,77,79,0.08)') : 'rgba(255,255,255,0.03)',
+                            background: isAutoGraded ? (isCorrect ? 'rgba(0,255,136,0.08)' : 'rgba(255,77,79,0.08)') : 'rgba(255,255,255,0.03)',
                             padding: '0.75rem',
                             borderRadius: '4px',
-                            border: `1px solid ${isMcq ? (isCorrect ? '#00cc66' : '#ff4d4f') : 'var(--border-subtle)'}`
+                            border: `1px solid ${isAutoGraded ? (isCorrect ? '#00cc66' : '#ff4d4f') : 'var(--border-subtle)'}`
                           }}>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Candidate's Answer:</div>
                             <div style={{ color: 'var(--text-ivory)', whiteSpace: 'pre-wrap' }}>{answer}</div>
-                            {isMcq && (
+                            {isAutoGraded && (
                               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: isCorrect ? '#00cc66' : '#ffaa33' }}>
-                                {isCorrect ? '✓ Correct (+{q.points} pts)' : `✗ Incorrect (Correct answer: ${q.correct_answer})`}
+                                {isCorrect ? `✓ Correct (+${q.points} / ${q.points} pts)` : `✗ Incorrect (0 / ${q.points} pts • Correct answer: ${q.correct_answer})`}
                               </div>
                             )}
-                            {!isMcq && (
+                            {!isAutoGraded && (
                               <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <label style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Score (out of {q.points}):</label>
                                 <input
@@ -1499,23 +1526,77 @@ const ExaminerFlow = () => {
                   )}
                 </div>
 
-                {scriptInfractions.length > 0 && (
-                  <div style={{ marginBottom: '2rem' }}>
-                    <h4 style={{ color: '#ff4d4f', marginBottom: '1rem' }}>Proctoring Log ({scriptInfractions.length} infractions)</h4>
-                    <div style={{ maxHeight: '200px', overflowY: 'auto', background: 'var(--bg-obsidian)', borderRadius: '4px', padding: '0.75rem' }}>
-                      {scriptInfractions.map(inf => (
-                        <div key={inf.id} style={{ display: 'flex', gap: '1rem', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem' }}>
-                          <span style={{ color: 'var(--text-muted)', minWidth: '140px' }}>{new Date(inf.logged_at).toLocaleTimeString()}</span>
-                          <span style={{
-                            color: inf.infraction_type === 'visibilitychange' ? '#ff4d4f' : '#ffaa33',
-                            fontWeight: 'bold', minWidth: '120px'
-                          }}>{inf.infraction_type}</span>
-                          <span style={{ color: 'var(--text-ivory)' }}>{inf.details}</span>
+                {scriptInfractions.length > 0 && (() => {
+                  const SEVERITY_COLOR = { high: '#ff4d4f', medium: '#ffaa33', low: '#8aa9c9', info: 'var(--text-muted)' };
+                  const filtered = scriptInfractions
+                    .filter(inf => infractionSeverityFilter === 'all' || (inf.severity || 'low') === infractionSeverityFilter)
+                    .slice()
+                    .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1) || new Date(a.logged_at) - new Date(b.logged_at));
+                  const counts = scriptInfractions.reduce((acc, i) => {
+                    const s = i.severity || 'low';
+                    acc[s] = (acc[s] || 0) + 1;
+                    return acc;
+                  }, {});
+
+                  return (
+                    <div style={{ marginBottom: '2rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                        <h4 style={{ color: '#ff4d4f', margin: 0 }}>Proctoring Log ({scriptInfractions.length} events — {counts.high || 0} high, {counts.medium || 0} medium)</h4>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          {['all', 'high', 'medium', 'low', 'info'].map(lvl => (
+                            <button key={lvl} onClick={() => setInfractionSeverityFilter(lvl)}
+                              style={{
+                                padding: '0.25rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', cursor: 'pointer',
+                                border: `1px solid ${infractionSeverityFilter === lvl ? 'var(--border-focus)' : 'rgba(255,255,255,0.1)'}`,
+                                background: infractionSeverityFilter === lvl ? 'rgba(197,160,89,0.15)' : 'transparent',
+                                color: lvl === 'all' ? 'var(--text-ivory)' : SEVERITY_COLOR[lvl]
+                              }}>{lvl}{lvl !== 'all' ? ` (${counts[lvl] || 0})` : ''}</button>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                      <div style={{ maxHeight: '360px', overflowY: 'auto', background: 'var(--bg-obsidian)', borderRadius: '4px', padding: '0.75rem' }}>
+                        {filtered.length === 0 && (
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem' }}>No events at this severity.</div>
+                        )}
+                        {filtered.map(inf => {
+                          const severity = inf.severity || 'low';
+                          const evidenceUrl = inf.evidence_path ? evidenceUrls[inf.evidence_path] : null;
+                          return (
+                            <div key={inf.id} style={{ display: 'flex', gap: '1rem', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem', alignItems: 'flex-start' }}>
+                              {evidenceUrl ? (
+                                <a href={evidenceUrl} target="_blank" rel="noreferrer">
+                                  <img src={evidenceUrl} alt="Evidence frame" style={{ width: '64px', height: '48px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${SEVERITY_COLOR[severity]}` }} />
+                                </a>
+                              ) : (
+                                <div style={{ width: '64px', height: '48px', flexShrink: 0, borderRadius: '4px', border: '1px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>no frame</div>
+                              )}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <span style={{ color: 'var(--text-muted)' }}>{new Date(inf.logged_at).toLocaleTimeString()}</span>
+                                  <span style={{ color: SEVERITY_COLOR[severity], fontWeight: 'bold', textTransform: 'uppercase', fontSize: '0.7rem', border: `1px solid ${SEVERITY_COLOR[severity]}`, borderRadius: '3px', padding: '0 0.35rem' }}>{severity}</span>
+                                  <span style={{ color: 'var(--text-ivory)', fontWeight: 'bold' }}>{inf.infraction_type}</span>
+                                  {inf.duration_seconds != null && <span style={{ color: 'var(--text-muted)' }}>({inf.duration_seconds}s)</span>}
+                                </div>
+                                <div style={{ color: 'var(--text-ivory)', marginTop: '0.15rem' }}>{inf.details}</div>
+                              </div>
+                              <button
+                                onClick={() => markInfractionReviewed(inf.id, inf.reviewed ? '' : 'Reviewed — no action needed')}
+                                style={{
+                                  fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', flexShrink: 0,
+                                  border: '1px solid rgba(255,255,255,0.15)',
+                                  background: inf.reviewed ? 'rgba(74,222,128,0.15)' : 'transparent',
+                                  color: inf.reviewed ? '#4ade80' : 'var(--text-muted)'
+                                }}>{inf.reviewed ? '✓ Reviewed' : 'Mark reviewed'}</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                        "Info"/"low" events are brief attention lapses under a few seconds and are logged for pattern-tracking only — they are not accusations. Evidence frames are only captured for medium/high severity events to limit storage use.
+                      </p>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '2rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>

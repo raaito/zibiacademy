@@ -506,11 +506,16 @@ const SuperAdminFlow = () => {
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Candidate</th>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Assessment</th>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Type</th>
+                          <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Severity</th>
                           <th style={{ padding: '0.75rem', color: 'var(--accent-gold)' }}>Details</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {proctorData.map(inf => (
+                        {proctorData.map(inf => {
+                          const SEVERITY_COLOR = { high: '#ff4d4f', medium: '#ffaa33', low: '#8aa9c9', info: '#8a8a8a' };
+                          const severity = inf.severity || 'low'; // rows logged before the migration have no severity yet
+                          const color = SEVERITY_COLOR[severity] || SEVERITY_COLOR.low;
+                          return (
                           <tr key={inf.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                             <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                               {new Date(inf.logged_at).toLocaleString()}
@@ -529,15 +534,26 @@ const SuperAdminFlow = () => {
                             <td style={{ padding: '0.75rem' }}>
                               <span style={{
                                 padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold',
-                                background: inf.infraction_type === 'visibilitychange' ? 'rgba(255,77,79,0.15)' : 'rgba(255,170,51,0.15)',
-                                color: inf.infraction_type === 'visibilitychange' ? '#ff4d4f' : '#ffaa33'
+                                background: `${color}26`,
+                                color
                               }}>
                                 {inf.infraction_type}
                               </span>
                             </td>
-                            <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-ivory)' }}>{inf.details}</td>
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{ color, fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                {severity}{inf.duration_seconds != null ? ` · ${inf.duration_seconds}s` : ''}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-ivory)' }}>
+                              {inf.details}
+                              {inf.evidence_path && (
+                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>📷 evidence attached</span>
+                              )}
+                            </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

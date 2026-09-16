@@ -107,8 +107,30 @@ CREATE TABLE public.infraction_logs (
     assessment_id UUID REFERENCES public.assessments(id) ON DELETE CASCADE NOT NULL,
     infraction_type TEXT NOT NULL, -- e.g., 'blur', 'visibilitychange', 'copy'
     details TEXT,
-    logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    -- Proctoring evidence columns (backfilled for existing deployments)
+    severity TEXT DEFAULT 'low', -- 'info' | 'low' | 'medium' | 'high'
+    duration_seconds INT,        -- e.g. how long the candidate was away
+    evidence_path TEXT,          -- storage path in the 'proctoring-evidence' bucket
+    reviewed BOOLEAN DEFAULT false,
+    reviewer_note TEXT
 );
+
+-- 6a. Proctoring Snapshots (periodic visual evidence, one frame every 5s)
+CREATE TABLE public.proctoring_snapshots (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    candidate_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    assessment_id UUID REFERENCES public.assessments(id) ON DELETE CASCADE NOT NULL,
+    evidence_path TEXT NOT NULL, -- storage path in the 'proctoring-evidence' bucket
+    trigger_type TEXT NOT NULL,  -- 'heartbeat' or the infraction type that prompted it
+    captured_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Private storage bucket for proctoring evidence (webcam snapshots).
+-- Never public: examiners read frames via short-lived signed URLs.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('proctoring-evidence', 'proctoring-evidence', false)
+ON CONFLICT (id) DO NOTHING;
 
 
 -- ROW LEVEL SECURITY (RLS) MACROS --
@@ -199,6 +221,24 @@ CREATE POLICY "Candidates insert infractions" ON public.infraction_logs FOR INSE
 CREATE POLICY "Examiners view infractions" ON public.infraction_logs FOR SELECT USING (public.get_user_role() IN ('superadmin', 'examiner'));
 CREATE POLICY "Examiners delete infractions" ON public.infraction_logs FOR DELETE USING (public.get_user_role() IN ('superadmin', 'examiner'));
 
+-- Proctoring Snapshots
+ALTER TABLE public.proctoring_snapshots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Candidates insert snapshots" ON public.proctoring_snapshots FOR INSERT WITH CHECK (auth.uid() = candidate_id);
+CREATE POLICY "Examiners view snapshots" ON public.proctoring_snapshots FOR SELECT USING (public.get_user_role() IN ('superadmin', 'examiner'));
+CREATE POLICY "Examiners delete snapshots" ON public.proctoring_snapshots FOR DELETE USING (public.get_user_role() IN ('superadmin', 'examiner'));
+
+-- Proctoring evidence storage (private bucket; candidates upload only into
+-- their own folder, examiners read frames via signed URLs)
+CREATE POLICY "Candidates upload proctoring evidence" ON storage.objects FOR INSERT TO authenticated WITH CHECK (
+  bucket_id = 'proctoring-evidence' AND (storage.foldername(name))[1] = auth.uid()::text
+);
+CREATE POLICY "Examiners view proctoring evidence" ON storage.objects FOR SELECT TO authenticated USING (
+  bucket_id = 'proctoring-evidence' AND public.get_user_role() IN ('superadmin', 'examiner')
+);
+CREATE POLICY "Examiners delete proctoring evidence" ON storage.objects FOR DELETE TO authenticated USING (
+  bucket_id = 'proctoring-evidence' AND public.get_user_role() IN ('superadmin', 'examiner')
+);
+
 -- Academic Years
 ALTER TABLE public.academic_years ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Academic years viewable by everyone" ON public.academic_years FOR SELECT USING (true);
@@ -254,6 +294,8 @@ CREATE INDEX IF NOT EXISTS idx_assessments_created_by ON public.assessments(crea
 CREATE INDEX IF NOT EXISTS idx_assessments_cohort_id ON public.assessments(cohort_id);
 CREATE INDEX IF NOT EXISTS idx_infraction_logs_assessment_id ON public.infraction_logs(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_infraction_logs_candidate_id ON public.infraction_logs(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_proctoring_snapshots_assessment_id ON public.proctoring_snapshots(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_proctoring_snapshots_candidate_id ON public.proctoring_snapshots(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_cohort_id ON public.profiles(cohort_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
