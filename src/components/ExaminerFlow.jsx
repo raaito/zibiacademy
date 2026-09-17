@@ -47,6 +47,15 @@ const ExaminerFlow = () => {
   const [evidenceUrls, setEvidenceUrls] = useState({}); // evidence_path -> signed URL
   const [infractionSeverityFilter, setInfractionSeverityFilter] = useState('all');
 
+  // Continuous Screen Snapshots gallery states
+  const [allSnapshots, setAllSnapshots] = useState([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [proctoringActiveTab, setProctoringActiveTab] = useState('snapshots'); // 'snapshots' | 'infractions'
+  const [snapshotFilter, setSnapshotFilter] = useState('all'); // 'all' | 'heartbeat' | 'infraction'
+  const [lightboxSnapshot, setLightboxSnapshot] = useState(null);
+  const [isPlayingReel, setIsPlayingReel] = useState(false);
+  const [activeReelIndex, setActiveReelIndex] = useState(0);
+
   // Access modal & Unwritten candidates state
   const [accessModal, setAccessModal] = useState(null); // { assessment } | null
   const [allStaff, setAllStaff] = useState([]);
@@ -333,6 +342,90 @@ const ExaminerFlow = () => {
     }));
     setEvidenceUrls(urlMap);
   };
+
+  const fetchAllProctoringSnapshots = async (candidateId, assessmentId) => {
+    if (!candidateId || !assessmentId) return;
+    setSnapshotsLoading(true);
+    setAllSnapshots([]);
+    try {
+      const folderPath = `${candidateId}/${assessmentId}`;
+      const { data: files, error: listError } = await supabase.storage
+        .from('proctoring-evidence')
+        .list(folderPath, {
+          limit: 500,
+          sortBy: { column: 'name', order: 'asc' }
+        });
+
+      if (listError) {
+        console.warn('Proctoring storage list notice:', listError.message);
+      }
+
+      const validFiles = (files || []).filter(f => f.name && !f.name.startsWith('.'));
+
+      if (validFiles.length > 0) {
+        const paths = validFiles.map(f => `${folderPath}/${f.name}`);
+        const { data: signedData } = await supabase.storage
+          .from('proctoring-evidence')
+          .createSignedUrls(paths, 3600);
+
+        const urlMap = {};
+        if (signedData) {
+          signedData.forEach(item => {
+            if (item?.signedUrl) urlMap[item.path] = item.signedUrl;
+          });
+        }
+
+        const mapped = validFiles.map((f, idx) => {
+          const fullPath = `${folderPath}/${f.name}`;
+          const base = f.name.replace(/\.[^/.]+$/, '');
+          const dashIdx = base.indexOf('-');
+          let timestamp = Date.now();
+          let trigger = 'snapshot';
+          if (dashIdx > 0) {
+            const tsPart = parseInt(base.substring(0, dashIdx));
+            if (!isNaN(tsPart)) timestamp = tsPart;
+            trigger = base.substring(dashIdx + 1);
+          }
+          return {
+            id: f.id || `${fullPath}_${idx}`,
+            name: f.name,
+            path: fullPath,
+            signedUrl: urlMap[fullPath] || null,
+            timestamp,
+            dateStr: new Date(timestamp).toLocaleTimeString(),
+            fullDateStr: new Date(timestamp).toLocaleString(),
+            trigger: trigger.replace(/_/g, ' ').toUpperCase(),
+            rawTrigger: trigger.toLowerCase(),
+            size: f.metadata?.size ? `${Math.round(f.metadata.size / 1024)} KB` : ''
+          };
+        });
+
+        mapped.sort((a, b) => a.timestamp - b.timestamp);
+        setAllSnapshots(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load proctoring snapshots:', err);
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  };
+
+  // Reel slideshow player effect
+  useEffect(() => {
+    let timer;
+    if (isPlayingReel && allSnapshots.length > 0) {
+      timer = setInterval(() => {
+        setActiveReelIndex(prev => {
+          if (prev + 1 >= allSnapshots.length) {
+            setIsPlayingReel(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1200);
+    }
+    return () => clearInterval(timer);
+  }, [isPlayingReel, allSnapshots.length]);
 
   const markInfractionReviewed = async (infractionId, note = '') => {
     const { error } = await supabase.from('infraction_logs')
@@ -1355,7 +1448,17 @@ const ExaminerFlow = () => {
                           <td style={{ padding: '1rem' }}>{s.auto_mcq_score}</td>
                           <td style={{ padding: '1rem' }}>{s.manual_theory_score}</td>
                           <td style={{ padding: '1rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <button onClick={() => { setActiveScript(s); setScriptInfractions([]); fetchInfractions(s.candidate_id, selectedAssessmentId); if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId); }} className="btn-premium" style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem' }}>Review</button>
+                            <button onClick={() => {
+                              setActiveScript(s);
+                              setScriptInfractions([]);
+                              setAllSnapshots([]);
+                              setIsPlayingReel(false);
+                              setActiveReelIndex(0);
+                              setProctoringActiveTab('snapshots');
+                              fetchInfractions(s.candidate_id, selectedAssessmentId);
+                              fetchAllProctoringSnapshots(s.candidate_id, selectedAssessmentId);
+                              if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId);
+                            }} className="btn-premium" style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem' }}>Review</button>
                             <button
                               onClick={() => exportExamPDF([s])}
                               className="btn-premium"
@@ -1526,77 +1629,358 @@ const ExaminerFlow = () => {
                   )}
                 </div>
 
-                {scriptInfractions.length > 0 && (() => {
-                  const SEVERITY_COLOR = { high: '#ff4d4f', medium: '#ffaa33', low: '#8aa9c9', info: 'var(--text-muted)' };
-                  const filtered = scriptInfractions
-                    .filter(inf => infractionSeverityFilter === 'all' || (inf.severity || 'low') === infractionSeverityFilter)
-                    .slice()
-                    .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1) || new Date(a.logged_at) - new Date(b.logged_at));
-                  const counts = scriptInfractions.reduce((acc, i) => {
-                    const s = i.severity || 'low';
-                    acc[s] = (acc[s] || 0) + 1;
-                    return acc;
-                  }, {});
-
-                  return (
-                    <div style={{ marginBottom: '2rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
-                        <h4 style={{ color: '#ff4d4f', margin: 0 }}>Proctoring Log ({scriptInfractions.length} events — {counts.high || 0} high, {counts.medium || 0} medium)</h4>
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          {['all', 'high', 'medium', 'low', 'info'].map(lvl => (
-                            <button key={lvl} onClick={() => setInfractionSeverityFilter(lvl)}
-                              style={{
-                                padding: '0.25rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', cursor: 'pointer',
-                                border: `1px solid ${infractionSeverityFilter === lvl ? 'var(--border-focus)' : 'rgba(255,255,255,0.1)'}`,
-                                background: infractionSeverityFilter === lvl ? 'rgba(197,160,89,0.15)' : 'transparent',
-                                color: lvl === 'all' ? 'var(--text-ivory)' : SEVERITY_COLOR[lvl]
-                              }}>{lvl}{lvl !== 'all' ? ` (${counts[lvl] || 0})` : ''}</button>
-                          ))}
-                        </div>
+                {/* PROCTORING AUDIT & CONTINUOUS SCREEN SURVEILLANCE SUITE */}
+                <div style={{ marginBottom: '2rem', padding: '1.25rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-ivory)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span>🛡️ Proctoring Audit & Screen Surveillance</span>
+                      </h4>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                        Continuous screen snapshots & violation captures stored securely in Supabase Storage (<code style={{ color: 'var(--accent-gold)' }}>proctoring-evidence</code>)
                       </div>
-                      <div style={{ maxHeight: '360px', overflowY: 'auto', background: 'var(--bg-obsidian)', borderRadius: '4px', padding: '0.75rem' }}>
-                        {filtered.length === 0 && (
-                          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem' }}>No events at this severity.</div>
-                        )}
-                        {filtered.map(inf => {
-                          const severity = inf.severity || 'low';
-                          const evidenceUrl = inf.evidence_path ? evidenceUrls[inf.evidence_path] : null;
-                          return (
-                            <div key={inf.id} style={{ display: 'flex', gap: '1rem', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem', alignItems: 'flex-start' }}>
-                              {evidenceUrl ? (
-                                <a href={evidenceUrl} target="_blank" rel="noreferrer">
-                                  <img src={evidenceUrl} alt="Evidence frame" style={{ width: '64px', height: '48px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${SEVERITY_COLOR[severity]}` }} />
-                                </a>
-                              ) : (
-                                <div style={{ width: '64px', height: '48px', flexShrink: 0, borderRadius: '4px', border: '1px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>no frame</div>
-                              )}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                  <span style={{ color: 'var(--text-muted)' }}>{new Date(inf.logged_at).toLocaleTimeString()}</span>
-                                  <span style={{ color: SEVERITY_COLOR[severity], fontWeight: 'bold', textTransform: 'uppercase', fontSize: '0.7rem', border: `1px solid ${SEVERITY_COLOR[severity]}`, borderRadius: '3px', padding: '0 0.35rem' }}>{severity}</span>
-                                  <span style={{ color: 'var(--text-ivory)', fontWeight: 'bold' }}>{inf.infraction_type}</span>
-                                  {inf.duration_seconds != null && <span style={{ color: 'var(--text-muted)' }}>({inf.duration_seconds}s)</span>}
-                                </div>
-                                <div style={{ color: 'var(--text-ivory)', marginTop: '0.15rem' }}>{inf.details}</div>
-                              </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--bg-obsidian)', padding: '0.25rem', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setProctoringActiveTab('snapshots')}
+                        style={{
+                          padding: '0.4rem 0.85rem',
+                          fontSize: '0.82rem',
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: proctoringActiveTab === 'snapshots' ? 'var(--accent-gold)' : 'transparent',
+                          color: proctoringActiveTab === 'snapshots' ? '#000' : 'var(--text-ivory)',
+                          fontWeight: proctoringActiveTab === 'snapshots' ? 'bold' : 'normal',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <span>📸 Continuous Snapshots</span>
+                        <span style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', borderRadius: '10px', background: proctoringActiveTab === 'snapshots' ? '#000' : 'rgba(255,255,255,0.1)', color: proctoringActiveTab === 'snapshots' ? '#fff' : 'inherit' }}>
+                          {allSnapshots.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setProctoringActiveTab('infractions')}
+                        style={{
+                          padding: '0.4rem 0.85rem',
+                          fontSize: '0.82rem',
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: proctoringActiveTab === 'infractions' ? '#ef4444' : 'transparent',
+                          color: proctoringActiveTab === 'infractions' ? '#fff' : 'var(--text-ivory)',
+                          fontWeight: proctoringActiveTab === 'infractions' ? 'bold' : 'normal',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <span>🚨 Infraction Events</span>
+                        <span style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', borderRadius: '10px', background: proctoringActiveTab === 'infractions' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.1)', color: '#fff' }}>
+                          {scriptInfractions.length}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* TAB 1: CONTINUOUS SCREEN SNAPSHOTS */}
+                  {proctoringActiveTab === 'snapshots' && (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', padding: '0.75rem 1rem', background: 'var(--bg-obsidian)', borderRadius: '6px', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {snapshotsLoading ? 'Scanning proctoring-evidence bucket...' : `${allSnapshots.length} snapshot frames captured`}
+                          </span>
+
+                          <div style={{ display: 'flex', gap: '0.3rem' }}>
+                            {['all', 'heartbeat', 'infraction'].map(f => (
                               <button
-                                onClick={() => markInfractionReviewed(inf.id, inf.reviewed ? '' : 'Reviewed — no action needed')}
+                                key={f}
+                                type="button"
+                                onClick={() => setSnapshotFilter(f)}
                                 style={{
-                                  fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', flexShrink: 0,
-                                  border: '1px solid rgba(255,255,255,0.15)',
-                                  background: inf.reviewed ? 'rgba(74,222,128,0.15)' : 'transparent',
-                                  color: inf.reviewed ? '#4ade80' : 'var(--text-muted)'
-                                }}>{inf.reviewed ? '✓ Reviewed' : 'Mark reviewed'}</button>
+                                  padding: '0.2rem 0.55rem',
+                                  fontSize: '0.75rem',
+                                  borderRadius: '4px',
+                                  border: `1px solid ${snapshotFilter === f ? 'var(--accent-gold)' : 'rgba(255,255,255,0.1)'}`,
+                                  background: snapshotFilter === f ? 'rgba(197,160,89,0.15)' : 'transparent',
+                                  color: snapshotFilter === f ? 'var(--accent-gold)' : 'var(--text-muted)',
+                                  cursor: 'pointer',
+                                  textTransform: 'capitalize'
+                                }}
+                              >
+                                {f}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {allSnapshots.length > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isPlayingReel) {
+                                  setIsPlayingReel(false);
+                                } else {
+                                  if (activeReelIndex >= allSnapshots.length - 1) setActiveReelIndex(0);
+                                  setIsPlayingReel(true);
+                                }
+                              }}
+                              className="btn-premium"
+                              style={{ padding: '0.3rem 0.75rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                            >
+                              <span>{isPlayingReel ? '⏸ Pause Reel' : '▶ Play Reel'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (allSnapshots[activeReelIndex]) {
+                                  setLightboxSnapshot(allSnapshots[activeReelIndex]);
+                                }
+                              }}
+                              style={{
+                                padding: '0.3rem 0.6rem',
+                                fontSize: '0.75rem',
+                                background: 'rgba(255,255,255,0.06)',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                color: 'var(--text-ivory)',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🔍 Zoom Frame ({activeReelIndex + 1}/{allSnapshots.length})
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => fetchAllProctoringSnapshots(activeScript.candidate_id, selectedAssessmentId)}
+                              style={{
+                                padding: '0.3rem 0.6rem',
+                                fontSize: '0.75rem',
+                                background: 'transparent',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                color: 'var(--text-muted)',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                              title="Refresh snapshot frames"
+                            >
+                              🔄
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Active Frame Viewer & Scrubber */}
+                      {allSnapshots.length > 0 && (
+                        <div style={{ marginBottom: '1.25rem', padding: '1rem', background: '#0a0a0c', border: '1px solid var(--border-subtle)', borderRadius: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }}>Frame #{activeReelIndex + 1} of {allSnapshots.length}</span>
+                              <span>•</span>
+                              <span>{allSnapshots[activeReelIndex]?.dateStr}</span>
+                              <span>•</span>
+                              <span style={{
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '3px',
+                                fontSize: '0.7rem',
+                                fontWeight: 'bold',
+                                background: allSnapshots[activeReelIndex]?.rawTrigger === 'heartbeat' ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.2)',
+                                color: allSnapshots[activeReelIndex]?.rawTrigger === 'heartbeat' ? '#60a5fa' : '#f87171'
+                              }}>
+                                {allSnapshots[activeReelIndex]?.trigger}
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={0}
+                              max={Math.max(0, allSnapshots.length - 1)}
+                              value={activeReelIndex}
+                              onChange={(e) => {
+                                setIsPlayingReel(false);
+                                setActiveReelIndex(parseInt(e.target.value));
+                              }}
+                              style={{ flex: 1, maxWidth: '280px', margin: '0 1rem', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
+                            />
+                          </div>
+
+                          <div
+                            onClick={() => setLightboxSnapshot(allSnapshots[activeReelIndex])}
+                            style={{ position: 'relative', width: '100%', maxHeight: '420px', background: '#000', borderRadius: '4px', overflow: 'hidden', cursor: 'zoom-in', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                          >
+                            {allSnapshots[activeReelIndex]?.signedUrl ? (
+                              <img
+                                src={allSnapshots[activeReelIndex].signedUrl}
+                                alt={`Frame ${activeReelIndex + 1}`}
+                                style={{ maxWidth: '100%', maxHeight: '420px', objectFit: 'contain' }}
+                              />
+                            ) : (
+                              <div style={{ padding: '3rem', color: 'var(--text-muted)' }}>Loading snapshot image...</div>
+                            )}
+                            <div style={{ position: 'absolute', bottom: '8px', right: '12px', background: 'rgba(0,0,0,0.7)', padding: '0.2rem 0.5rem', borderRadius: '3px', fontSize: '0.75rem', color: '#fff' }}>
+                              🔍 Click to enlarge
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Snapshots Grid */}
+                      {snapshotsLoading ? (
+                        <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                          Loading proctoring snapshots from cloud storage...
+                        </div>
+                      ) : allSnapshots.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)', background: 'var(--bg-obsidian)', borderRadius: '6px' }}>
+                          <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-ivory)' }}>No proctoring snapshot frames found in storage for this session.</p>
+                          <p style={{ margin: '0.4rem 0 0', fontSize: '0.78rem' }}>
+                            Continuous snapshots are saved in the Supabase <code>proctoring-evidence</code> storage bucket under path: <code>{activeScript.candidate_id}/{selectedAssessmentId}/</code>.
+                          </p>
+                        </div>
+                      ) : (
+                        (() => {
+                          const displayed = allSnapshots.filter(s => {
+                            if (snapshotFilter === 'heartbeat') return s.rawTrigger === 'heartbeat';
+                            if (snapshotFilter === 'infraction') return s.rawTrigger !== 'heartbeat';
+                            return true;
+                          });
+
+                          return (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem', maxHeight: '340px', overflowY: 'auto', padding: '0.5rem', background: 'var(--bg-obsidian)', borderRadius: '6px' }}>
+                              {displayed.map((snap, idx) => {
+                                const isCurrent = allSnapshots.indexOf(snap) === activeReelIndex;
+                                return (
+                                  <div
+                                    key={snap.id || idx}
+                                    onClick={() => {
+                                      setActiveReelIndex(allSnapshots.indexOf(snap));
+                                      setLightboxSnapshot(snap);
+                                    }}
+                                    style={{
+                                      background: 'rgba(255,255,255,0.03)',
+                                      border: `1px solid ${isCurrent ? 'var(--accent-gold)' : 'rgba(255,255,255,0.08)'}`,
+                                      borderRadius: '4px',
+                                      overflow: 'hidden',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
+                                      boxShadow: isCurrent ? '0 0 8px rgba(197,160,89,0.3)' : 'none'
+                                    }}
+                                  >
+                                    <div style={{ position: 'relative', width: '100%', height: '105px', background: '#000' }}>
+                                      {snap.signedUrl ? (
+                                        <img src={snap.signedUrl} alt={snap.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                                      ) : (
+                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}>No URL</div>
+                                      )}
+                                      <span style={{
+                                        position: 'absolute',
+                                        top: '4px',
+                                        left: '4px',
+                                        fontSize: '0.65rem',
+                                        padding: '0.1rem 0.35rem',
+                                        borderRadius: '2px',
+                                        fontWeight: 'bold',
+                                        background: snap.rawTrigger === 'heartbeat' ? 'rgba(30, 58, 138, 0.9)' : 'rgba(185, 28, 28, 0.9)',
+                                        color: '#fff'
+                                      }}>
+                                        {snap.rawTrigger === 'heartbeat' ? '5S SNAP' : snap.trigger.slice(0, 14)}
+                                      </span>
+                                    </div>
+                                    <div style={{ padding: '0.4rem 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                      <span>{snap.dateStr}</span>
+                                      <span style={{ color: isCurrent ? 'var(--accent-gold)' : 'inherit' }}>#{allSnapshots.indexOf(snap) + 1}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           );
-                        })}
-                      </div>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-                        "Info"/"low" events are brief attention lapses under a few seconds and are logged for pattern-tracking only — they are not accusations. Evidence frames are only captured for medium/high severity events to limit storage use.
-                      </p>
+                        })()
+                      )}
                     </div>
-                  );
-                })()}
+                  )}
+
+                  {/* TAB 2: INFRACTION EVENTS LOG */}
+                  {proctoringActiveTab === 'infractions' && (() => {
+                    const SEVERITY_COLOR = { high: '#ff4d4f', medium: '#ffaa33', low: '#8aa9c9', info: 'var(--text-muted)' };
+                    const filtered = scriptInfractions
+                      .filter(inf => infractionSeverityFilter === 'all' || (inf.severity || 'low') === infractionSeverityFilter)
+                      .slice()
+                      .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1) || new Date(a.logged_at) - new Date(b.logged_at));
+                    const counts = scriptInfractions.reduce((acc, i) => {
+                      const s = i.severity || 'low';
+                      acc[s] = (acc[s] || 0) + 1;
+                      return acc;
+                    }, {});
+
+                    return (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                          <h4 style={{ color: '#ff4d4f', margin: 0 }}>Infraction Log ({scriptInfractions.length} events — {counts.high || 0} high, {counts.medium || 0} medium)</h4>
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            {['all', 'high', 'medium', 'low', 'info'].map(lvl => (
+                              <button key={lvl} onClick={() => setInfractionSeverityFilter(lvl)}
+                                style={{
+                                  padding: '0.25rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', cursor: 'pointer',
+                                  border: `1px solid ${infractionSeverityFilter === lvl ? 'var(--border-focus)' : 'rgba(255,255,255,0.1)'}`,
+                                  background: infractionSeverityFilter === lvl ? 'rgba(197,160,89,0.15)' : 'transparent',
+                                  color: lvl === 'all' ? 'var(--text-ivory)' : SEVERITY_COLOR[lvl]
+                                }}>{lvl}{lvl !== 'all' ? ` (${counts[lvl] || 0})` : ''}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ maxHeight: '360px', overflowY: 'auto', background: 'var(--bg-obsidian)', borderRadius: '4px', padding: '0.75rem' }}>
+                          {filtered.length === 0 && (
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem' }}>No events at this severity.</div>
+                          )}
+                          {filtered.map(inf => {
+                            const severity = inf.severity || 'low';
+                            const evidenceUrl = inf.evidence_path ? evidenceUrls[inf.evidence_path] : null;
+                            return (
+                              <div key={inf.id} style={{ display: 'flex', gap: '1rem', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '0.85rem', alignItems: 'flex-start' }}>
+                                {evidenceUrl ? (
+                                  <a href={evidenceUrl} target="_blank" rel="noreferrer">
+                                    <img src={evidenceUrl} alt="Evidence frame" style={{ width: '64px', height: '48px', objectFit: 'cover', borderRadius: '4px', border: `1px solid ${SEVERITY_COLOR[severity]}` }} />
+                                  </a>
+                                ) : (
+                                  <div style={{ width: '64px', height: '48px', flexShrink: 0, borderRadius: '4px', border: '1px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>no frame</div>
+                                )}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <span style={{ color: 'var(--text-muted)' }}>{new Date(inf.logged_at).toLocaleTimeString()}</span>
+                                    <span style={{ color: SEVERITY_COLOR[severity], fontWeight: 'bold', textTransform: 'uppercase', fontSize: '0.7rem', border: `1px solid ${SEVERITY_COLOR[severity]}`, borderRadius: '3px', padding: '0 0.35rem' }}>{severity}</span>
+                                    <span style={{ color: 'var(--text-ivory)', fontWeight: 'bold' }}>{inf.infraction_type}</span>
+                                    {inf.duration_seconds != null && <span style={{ color: 'var(--text-muted)' }}>({inf.duration_seconds}s)</span>}
+                                  </div>
+                                  <div style={{ color: 'var(--text-ivory)', marginTop: '0.15rem' }}>{inf.details}</div>
+                                </div>
+                                <button
+                                  onClick={() => markInfractionReviewed(inf.id, inf.reviewed ? '' : 'Reviewed — no action needed')}
+                                  style={{
+                                    fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', flexShrink: 0,
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    background: inf.reviewed ? 'rgba(74,222,128,0.15)' : 'transparent',
+                                    color: inf.reviewed ? '#4ade80' : 'var(--text-muted)'
+                                  }}>{inf.reviewed ? '✓ Reviewed' : 'Mark reviewed'}</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                          "Info"/"low" events are brief attention lapses under a few seconds and are logged for pattern-tracking only. Evidence frames are captured for medium/high severity events and continuous intervals.
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
 
                 <div style={{ borderTop: '1px dashed var(--border-subtle)', paddingTop: '2rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
@@ -1933,6 +2317,99 @@ const ExaminerFlow = () => {
               >
                 🗑️ Yes, Delete Permanently
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN LIGHTBOX FOR PROCTORING SNAPSHOTS */}
+      {lightboxSnapshot && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.92)',
+          zIndex: 99999,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '1200px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-focus)',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: '92vh'
+          }}>
+            <div style={{
+              padding: '0.75rem 1.25rem',
+              background: 'var(--bg-obsidian)',
+              borderBottom: '1px solid var(--border-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem'
+            }}>
+              <div>
+                <h4 style={{ margin: 0, color: 'var(--text-ivory)', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>Proctoring Snapshot Frame:</span>
+                  <span style={{ color: 'var(--accent-gold)' }}>{lightboxSnapshot.trigger}</span>
+                </h4>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                  Recorded: {lightboxSnapshot.fullDateStr} {lightboxSnapshot.size && `• ${lightboxSnapshot.size}`}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <a
+                  href={lightboxSnapshot.signedUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-premium"
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', textDecoration: 'none' }}
+                >
+                  ↗ Open Full Frame
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setLightboxSnapshot(null)}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: 'var(--text-ivory)',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+
+            <div style={{
+              flex: 1,
+              background: '#000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              overflow: 'hidden'
+            }}>
+              <img
+                src={lightboxSnapshot.signedUrl}
+                alt={lightboxSnapshot.name}
+                style={{ maxWidth: '100%', maxHeight: 'calc(90vh - 120px)', objectFit: 'contain' }}
+              />
             </div>
           </div>
         </div>

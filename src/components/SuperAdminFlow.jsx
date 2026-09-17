@@ -23,6 +23,7 @@ const SuperAdminFlow = () => {
 
   const [proctorData, setProctorData] = useState([]);
   const [proctorLoading, setProctorLoading] = useState(false);
+  const [evidencePreview, setEvidencePreview] = useState(null);
 
   const [staff, setStaff] = useState([]);
   const [staffPage, setStaffPage] = useState(0);
@@ -49,6 +50,21 @@ const SuperAdminFlow = () => {
   useEffect(() => {
     if (!loadingDb && activeTab === 'staff') fetchStaffPage(staffPage);
   }, [staffPage]);
+
+  const handleViewEvidence = async (evidencePath, inf) => {
+    try {
+      const { data: signed } = await supabase.storage
+        .from('proctoring-evidence')
+        .createSignedUrl(evidencePath, 600);
+      if (signed?.signedUrl) {
+        setEvidencePreview({ url: signed.signedUrl, inf });
+      } else {
+        toast.error('Could not generate link for evidence snapshot.');
+      }
+    } catch (err) {
+      toast.error('Failed to view image: ' + err.message);
+    }
+  };
 
   const fetchCandidatesPage = async (page) => {
     const from = page * PAGE_SIZE;
@@ -548,7 +564,14 @@ const SuperAdminFlow = () => {
                             <td style={{ padding: '0.75rem', fontSize: '0.85rem', color: 'var(--text-ivory)' }}>
                               {inf.details}
                               {inf.evidence_path && (
-                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>📷 evidence attached</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewEvidence(inf.evidence_path, inf)}
+                                  className="btn-premium"
+                                  style={{ marginLeft: '0.6rem', padding: '0.2rem 0.5rem', fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                                >
+                                  📷 View Frame
+                                </button>
                               )}
                             </td>
                           </tr>
@@ -681,6 +704,97 @@ const SuperAdminFlow = () => {
           </>
         )}
       </div>
+
+      {/* FULLSCREEN EVIDENCE PREVIEW MODAL */}
+      {evidencePreview && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.92)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '1100px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-focus)',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: '90vh'
+          }}>
+            <div style={{
+              padding: '0.75rem 1.25rem',
+              background: 'var(--bg-obsidian)',
+              borderBottom: '1px solid var(--border-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem'
+            }}>
+              <div>
+                <h4 style={{ margin: 0, color: 'var(--text-ivory)', fontSize: '1rem' }}>
+                  Proctoring Evidence Frame: <span style={{ color: '#ef4444' }}>{evidencePreview.inf?.infraction_type}</span>
+                </h4>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                  {evidencePreview.inf?.profiles?.full_name} ({evidencePreview.inf?.profiles?.matriculation_number}) • {new Date(evidencePreview.inf?.logged_at).toLocaleString()}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <a
+                  href={evidencePreview.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-premium"
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', textDecoration: 'none' }}
+                >
+                  ↗ Open Original
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setEvidencePreview(null)}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: 'var(--text-ivory)',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+
+            <div style={{
+              flex: 1,
+              background: '#000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              overflow: 'hidden'
+            }}>
+              <img
+                src={evidencePreview.url}
+                alt="Infraction Evidence"
+                style={{ maxWidth: '100%', maxHeight: 'calc(90vh - 120px)', objectFit: 'contain' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

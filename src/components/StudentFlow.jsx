@@ -82,13 +82,28 @@ const StudentFlow = () => {
   const webcamVideoElRef = React.useRef(null);
   const canvasElRef = React.useRef(null);
   const lastCaptureAtRef = React.useRef(0);
-  const MIN_CAPTURE_INTERVAL_MS = 5000; // 5s interval for periodic heartbeat
+  const MIN_CAPTURE_INTERVAL_MS = 3500; // Throttle to prevent duplicate concurrent captures
 
   // Away-tracking & violation counters
   const awaySinceRef = React.useRef(null);
   const awaySignalsRef = React.useRef(new Set());
   const awayCountRef = React.useRef(0);
   const genuineAwayCountRef = React.useRef(0);
+
+  const exitFullscreenSafely = () => {
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen().catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('Could not exit fullscreen:', e);
+    }
+    setFullscreenLost(false);
+  };
 
   const stopProctoringStreams = () => {
     if (screenStreamRef.current) {
@@ -99,6 +114,7 @@ const StudentFlow = () => {
       webcamStreamRef.current.getTracks().forEach(t => t.stop());
       webcamStreamRef.current = null;
     }
+    exitFullscreenSafely();
   };
 
   const handleScreenShareStopped = () => {
@@ -351,6 +367,10 @@ const StudentFlow = () => {
     if (activeExam?.id) {
       localStorage.removeItem(`zibi_exam_draft_${activeExam.id}`);
     }
+
+    exitFullscreenSafely();
+    stopProctoringStreams();
+    setExamState('finished');
 
     toast.error('Your examination has been FORFEITED and your student portal SUSPENDED due to malpractice violations.', {
       duration: 10000
@@ -907,30 +927,49 @@ const StudentFlow = () => {
     if (examState !== 'taking_exam' || !activeExam || !user) return;
 
     const captureHeartbeat = async () => {
-      const path = await captureSnapshot('heartbeat');
-      if (!path) return;
-      await supabase.from('proctoring_snapshots').insert({
-        candidate_id: user.id,
-        assessment_id: activeExam.id,
-        evidence_path: path,
-        trigger_type: 'heartbeat'
-      });
+      try {
+        const path = await captureSnapshot('heartbeat', true);
+        if (!path) return;
+        try {
+          await supabase.from('proctoring_snapshots').insert({
+            candidate_id: user.id,
+            assessment_id: activeExam.id,
+            evidence_path: path,
+            trigger_type: 'heartbeat'
+          });
+        } catch {
+          // Table may not exist or RLS may block, image safely preserved in proctoring-evidence storage
+        }
+      } catch (err) {
+        console.error('Heartbeat snapshot error:', err);
+      }
     };
 
-    // One immediate baseline frame at the start of the section, then on the interval.
-    captureHeartbeat();
+    // Delay initial baseline frame by 1.5s so video element has time to receive initial screen frames
+    const initialTimer = setTimeout(() => {
+      captureHeartbeat();
+    }, 1500);
     const interval = setInterval(captureHeartbeat, HEARTBEAT_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, [examState, activeExam?.id, user?.id]);
 
-  // Release the screen capture & camera whenever we leave the exam-taking screen
+  // Release screen capture, camera, & exit fullscreen whenever leaving taking_exam
   useEffect(() => {
-    if (examState !== 'taking_exam') stopProctoringStreams();
+    if (examState !== 'taking_exam') {
+      stopProctoringStreams();
+      exitFullscreenSafely();
+    }
   }, [examState]);
 
   // Safety net: also release streams if the component unmounts entirely
   useEffect(() => {
-    return () => stopProctoringStreams();
+    return () => {
+      stopProctoringStreams();
+      exitFullscreenSafely();
+    };
   }, []);
 
 const advanceCategoryOrSubmit = (isManual = false, fromCategoryIndex = null) => {
@@ -1147,6 +1186,7 @@ useEffect(() => {
       return;
     }
 
+    exitFullscreenSafely();
     stopProctoringStreams();
 
     // Clear auto-save cache upon successful submission
