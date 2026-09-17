@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -58,103 +58,297 @@ const StudentFlow = () => {
   const [ipAddress, setIpAddress] = useState('');
   const [locationCoords, setLocationCoords] = useState(null);
 
-  let examStartRef = React.useRef(null);
+  // Strict Malpractice & Proctoring State
+  const [screenShareLost, setScreenShareLost] = useState(false);
+  const [malpracticeStrikes, setMalpracticeStrikes] = useState(0);
+  const [forfeitedReason, setForfeitedReason] = useState('');
+  const MAX_MALPRACTICE_STRIKES = 3;
 
-  // Visual proctoring: webcam stream + capture surface
+  let examStartRef = React.useRef(null);
+  const examStateRef = React.useRef(examState);
+  useEffect(() => {
+    examStateRef.current = examState;
+  }, [examState]);
+
+  // Screen Capture & Webcam Streams
+  const screenStreamRef = React.useRef(null);
+  const screenVideoElRef = React.useRef(null);
   const webcamStreamRef = React.useRef(null);
-  const videoElRef = React.useRef(null);
+  const webcamVideoElRef = React.useRef(null);
   const canvasElRef = React.useRef(null);
   const lastCaptureAtRef = React.useRef(0);
-  const MIN_CAPTURE_INTERVAL_MS = 5000; // never capture more than once per 5s
+  const MIN_CAPTURE_INTERVAL_MS = 5000; // 5s interval for periodic heartbeat
 
-  // Away-tracking state lives in refs, NOT local closure vars, because the
-  // anti-cheat effect below re-runs on every timeLeft/categoryTimeLeft tick
-  // (i.e. every second) — local `let` state inside that effect gets wiped
-  // on every one of those rebuilds, which silently broke duration tracking
-  // for anything lasting more than ~1s in the original implementation.
+  // Away-tracking & violation counters
   const awaySinceRef = React.useRef(null);
   const awaySignalsRef = React.useRef(new Set());
+  const awayCountRef = React.useRef(0);
 
-  // Takes examId explicitly rather than reading `activeExam` state, since
-  // this runs from inside startExam() before the setActiveExam() update
-  // has actually landed — reading state here would silently no-op.
-  const requestCameraAccess = async (examId) => {
-    // Defensive: stop any previously-open stream before requesting a new
-    // one, in case this ever gets invoked twice (e.g. a double-click on
-    // the start-exam confirmation) — otherwise the first stream's tracks
-    // would leak (camera stays on) since webcamStreamRef.current would
-    // simply be overwritten below.
-    stopWebcam();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false });
-      webcamStreamRef.current = stream;
-      if (!videoElRef.current) {
-        videoElRef.current = document.createElement('video');
-        videoElRef.current.playsInline = true;
-        videoElRef.current.muted = true;
-      }
-      videoElRef.current.srcObject = stream;
-      await videoElRef.current.play();
-      if (!canvasElRef.current) {
-        canvasElRef.current = document.createElement('canvas');
-        canvasElRef.current.width = 320;
-        canvasElRef.current.height = 240;
-      }
-      return true;
-    } catch (err) {
-      // Camera denied/unavailable — proctoring falls back to event-only
-      // logging. Surface this to the examiner rather than failing silently:
-      // a script with zero visual evidence looks very different from one
-      // where the student was never asked for camera access at all.
-      if (user && examId) {
-        await supabase.from('infraction_logs').insert({
-          candidate_id: user.id,
-          assessment_id: examId,
-          infraction_type: 'camera_unavailable',
-          details: `Webcam not available at exam start: ${err.message}`,
-          severity: 'medium'
-        });
-      }
-      toast('Camera access was not granted — this exam session will be event-logged only, without visual evidence.', { icon: '⚠️' });
-      return false;
+  const stopProctoringStreams = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
     }
-  };
-
-  const stopWebcam = () => {
     if (webcamStreamRef.current) {
       webcamStreamRef.current.getTracks().forEach(t => t.stop());
       webcamStreamRef.current = null;
     }
   };
 
-  // Captures a single frame, uploads it privately, returns the storage path
-  // (never a public URL — evidence is only readable by examiners via signed URL).
+  const handleScreenShareStopped = () => {
+    if (examStateRef.current !== 'taking_exam') return;
+    setScreenShareLost(true);
+    logInfraction(
+      'screen_share_stopped',
+      'CRITICAL: Student stopped sharing screen during active examination!',
+      { severity: 'high', captureEvidence: false }
+    );
+    recordMalpracticeStrike('Screen sharing was stopped during the active exam.');
+  };
+
+  const reenableScreenShare = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always', displaySurface: 'monitor' },
+        audio: false
+      });
+      screenStreamRef.current = stream;
+      if (screenVideoElRef.current) {
+        screenVideoElRef.current.srcObject = stream;
+        await screenVideoElRef.current.play();
+      }
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        track.onended = () => {
+          handleScreenShareStopped();
+        };
+      }
+      setScreenShareLost(false);
+      toast.success('Screen sharing re-established. Continuing examination.');
+      logInfraction('screen_share_restored', 'Candidate re-enabled mandatory screen sharing after interruption', { severity: 'low' });
+      return true;
+    } catch (err) {
+      toast.error('Failed to resume screen sharing: ' + err.message);
+      return false;
+    }
+  };
+
+  const requestProctoringStreams = async (examId) => {
+    stopProctoringStreams();
+    let screenGranted = false;
+
+    // 1. Mandatory Screen Capture (Captures candidate screen every 5s)
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: 'always',
+          displaySurface: 'monitor',
+        },
+        audio: false
+      });
+      screenStreamRef.current = screenStream;
+
+      if (!screenVideoElRef.current) {
+        screenVideoElRef.current = document.createElement('video');
+        screenVideoElRef.current.playsInline = true;
+        screenVideoElRef.current.muted = true;
+      }
+      screenVideoElRef.current.srcObject = screenStream;
+      await screenVideoElRef.current.play();
+
+      const screenTrack = screenStream.getVideoTracks()[0];
+      if (screenTrack) {
+        screenTrack.onended = () => {
+          handleScreenShareStopped();
+        };
+      }
+      screenGranted = true;
+    } catch (err) {
+      console.error('Screen capture permission denied:', err);
+      toast.error('Screen sharing is strictly mandatory for proctoring. You must select your ENTIRE SCREEN to begin.', { duration: 8000 });
+      if (user && examId) {
+        await supabase.from('infraction_logs').insert({
+          candidate_id: user.id,
+          assessment_id: examId,
+          infraction_type: 'screen_share_denied',
+          details: `Screen sharing refused or cancelled at exam start: ${err.message}`,
+          severity: 'high'
+        });
+      }
+      return false;
+    }
+
+    // 2. Also try requesting candidate webcam for live face Picture-in-Picture
+    try {
+      const camStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240 },
+        audio: false
+      });
+      webcamStreamRef.current = camStream;
+      if (!webcamVideoElRef.current) {
+        webcamVideoElRef.current = document.createElement('video');
+        webcamVideoElRef.current.playsInline = true;
+        webcamVideoElRef.current.muted = true;
+      }
+      webcamVideoElRef.current.srcObject = camStream;
+      await webcamVideoElRef.current.play();
+    } catch (camErr) {
+      console.warn('Webcam stream unavailable, continuing with screen capture only:', camErr);
+    }
+
+    // 3. Setup high-res snapshot canvas (1280x720 for crisp readable screen text)
+    if (!canvasElRef.current) {
+      canvasElRef.current = document.createElement('canvas');
+    }
+    canvasElRef.current.width = 1280;
+    canvasElRef.current.height = 720;
+
+    return screenGranted;
+  };
+
+  // Captures student screen (with optional face PiP in corner) every 5s & on infractions
   const captureSnapshot = async (trigger, force = false) => {
-    if (!webcamStreamRef.current || !videoElRef.current || !canvasElRef.current) return null;
+    if ((!screenStreamRef.current && !webcamStreamRef.current) || !canvasElRef.current) return null;
     const now = Date.now();
-    // The 5s throttle only guards the periodic heartbeat. Infraction evidence
-    // always captures (force = true) — with a 5s heartbeat a medium/high
-    // infraction could otherwise land inside the throttle window and have its
-    // evidence silently dropped, exactly when an examiner needs it most.
     if (!force && now - lastCaptureAtRef.current < MIN_CAPTURE_INTERVAL_MS) return null;
     lastCaptureAtRef.current = now;
 
     try {
-      const ctx = canvasElRef.current.getContext('2d');
-      ctx.drawImage(videoElRef.current, 0, 0, 320, 240);
-      const blob = await new Promise(res => canvasElRef.current.toBlob(res, 'image/jpeg', 0.6));
+      const canvas = canvasElRef.current;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0a0a0c';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Primary visual: candidate's active screen
+      if (screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0) {
+        ctx.drawImage(screenVideoElRef.current, 0, 0, canvas.width, canvas.height);
+      } else if (webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0) {
+        ctx.drawImage(webcamVideoElRef.current, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Picture-in-Picture: Candidate face webcam in top-right corner
+      if (
+        screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0 &&
+        webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0
+      ) {
+        const pipW = 240;
+        const pipH = 180;
+        const pipX = canvas.width - pipW - 16;
+        const pipY = 16;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
+        ctx.strokeStyle = '#c5a059';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
+
+        ctx.drawImage(webcamVideoElRef.current, pipX, pipY, pipW, pipH);
+
+        ctx.fillStyle = 'rgba(10, 10, 12, 0.85)';
+        ctx.fillRect(pipX, pipY + pipH - 24, pipW, 24);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '11px sans-serif';
+        ctx.fillText(`CAM: ${profile?.full_name?.slice(0, 20) || 'Candidate'}`, pipX + 8, pipY + pipH - 8);
+      }
+
+      // Proctoring audit security footer watermark
+      const barH = 32;
+      ctx.fillStyle = 'rgba(10, 10, 12, 0.88)';
+      ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
+      ctx.fillStyle = '#c5a059';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('DTMD STRICT SCREEN PROCTOR', 14, canvas.height - 12);
+
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '12px sans-serif';
+      const timeStr = new Date(now).toLocaleString();
+      const candStr = `${profile?.full_name || 'Student'} (${profile?.matriculation_number || user?.email || 'N/A'})`;
+      ctx.fillText(` | Candidate: ${candStr} | Event: ${trigger.toUpperCase()} | ${timeStr}`, 220, canvas.height - 12);
+
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.65));
       if (!blob) return null;
 
-      const path = `${user.id}/${activeExam.id}/${now}-${trigger}.jpg`;
+      const path = `${user.id}/${activeExam?.id || 'exam'}/${now}-${trigger}.jpg`;
       const { error } = await supabase.storage.from('proctoring-evidence').upload(path, blob, {
         contentType: 'image/jpeg',
         upsert: false
       });
-      if (error) return null;
+      if (error) {
+        console.warn('Evidence upload failed:', error.message);
+        return null;
+      }
       return path;
-    } catch {
+    } catch (err) {
+      console.error('Error in captureSnapshot:', err);
       return null;
     }
+  };
+
+  const recordMalpracticeStrike = async (reason) => {
+    const nextStrikes = malpracticeStrikes + 1;
+    setMalpracticeStrikes(nextStrikes);
+
+    if (nextStrikes >= MAX_MALPRACTICE_STRIKES) {
+      await triggerForfeitureAndSuspension(reason);
+    } else {
+      toast.error(
+        `🚨 MALPRACTICE STRIKE ${nextStrikes}/${MAX_MALPRACTICE_STRIKES}: ${reason}. School policy mandates automatic exam forfeiture & account suspension upon 3 strikes!`,
+        { duration: 8000, style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' } }
+      );
+    }
+  };
+
+  const triggerForfeitureAndSuspension = async (reason) => {
+    stopProctoringStreams();
+    setExamState('forfeited');
+    setForfeitedReason(reason);
+
+    // 1. Log high severity infraction
+    await logInfraction(
+      'auto_forfeit_suspended',
+      `EXAM FORFEITED & ACCOUNT SUSPENDED: Candidate reached ${MAX_MALPRACTICE_STRIKES} malpractice strikes. Violation: ${reason}`,
+      { severity: 'high', captureEvidence: true }
+    );
+
+    // 2. Submit candidate script with score 0
+    try {
+      let totalPossible = 0;
+      questions.forEach(q => { totalPossible += q.points; });
+      await supabase.from('candidate_scripts').insert({
+        candidate_id: user.id,
+        assessment_id: activeExam?.id,
+        answers: answers,
+        auto_mcq_score: 0,
+        manual_theory_score: 0,
+        total_possible_score: totalPossible,
+        question_scores: {},
+        is_graded: true,
+        device_info: `${deviceInfo} | FORFEITED FOR MALPRACTICE: Exceeded strikes limit. Trigger: ${reason}`,
+        ip_address: ipAddress,
+        location_lat: locationCoords !== null ? locationCoords.lat : null,
+        location_lng: locationCoords !== null ? locationCoords.lng : null
+      });
+    } catch (err) {
+      console.error('Failed to submit forfeited script:', err);
+    }
+
+    // 3. Suspend candidate account in profiles
+    try {
+      await supabase.from('profiles').update({
+        is_active: false
+      }).eq('id', user.id);
+    } catch (err) {
+      console.error('Failed to update candidate profile status:', err);
+    }
+
+    // 4. Remove local draft
+    if (activeExam?.id) {
+      localStorage.removeItem(`zibi_exam_draft_${activeExam.id}`);
+    }
+
+    toast.error('Your examination has been FORFEITED and your student portal SUSPENDED due to malpractice violations.', {
+      duration: 10000
+    });
   };
 
   useEffect(() => {
@@ -247,9 +441,21 @@ const StudentFlow = () => {
   };
 
   const startExam = async (exam) => {
-    setActiveExam(exam);
     captureDeviceInfo();
-    await requestCameraAccess(exam.id);
+    const granted = await requestProctoringStreams(exam.id);
+    if (!granted) {
+      return;
+    }
+    setActiveExam(exam);
+
+    // Request full-screen display lockdown
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // browser may restrict fullscreen without direct user gesture
+    }
 
     const blended = exam.is_blended || exam.question_type === 'blended';
     setIsBlended(blended);
@@ -433,17 +639,13 @@ const StudentFlow = () => {
     }, IDLE_TIMEOUT * 1000);
   };
 
-  // Anti-Cheat Engine Log
+  // Anti-Cheat Engine Log - Strict Event Monitoring
   useEffect(() => {
     if (examState !== 'taking_exam') return;
 
-    // Away-duration thresholds. Below MIN_LOGGABLE_SEC we still don't
-    // silently drop the event (a pattern of many short glances matters too)
-    // but we log it as 'info' severity with no evidence photo, so it never
-    // shows up as a red flag next to a genuine 40s tab switch.
     const MIN_LOGGABLE_SEC = 2;
     const MEDIUM_THRESHOLD_SEC = 8;
-    const HIGH_THRESHOLD_SEC = 25;
+    const HIGH_THRESHOLD_SEC = 20;
 
     const severityForDuration = (sec) => {
       if (sec >= HIGH_THRESHOLD_SEC) return 'high';
@@ -452,33 +654,41 @@ const StudentFlow = () => {
       return 'info';
     };
 
-    // Unified "attention left the exam" tracker. document.hidden and
-    // window blur/focus fire for overlapping reasons (tab switch, app
-    // switch, OS dialogs) — tracking them separately used to create two or
-    // three log rows for one real event. Now: whichever fires first opens
-    // the "away" window, whichever fires last (matching visible+focused)
-    // closes it, and exactly one row gets logged per away period.
     const isCurrentlyAway = () => document.hidden || !document.hasFocus();
 
     const openAwayWindow = (signal) => {
       awaySignalsRef.current.add(signal);
-      if (awaySinceRef.current === null) awaySinceRef.current = Date.now();
+      if (awaySinceRef.current === null) {
+        awaySinceRef.current = Date.now();
+        awayCountRef.current = (awayCountRef.current || 0) + 1;
+        // Immediately capture evidence frame of the screen upon leaving
+        captureSnapshot('navigated_away', true);
+      }
     };
 
     const closeAwayWindowIfDone = (signal) => {
       awaySignalsRef.current.delete(signal);
-      // Only actually "return" once every signal that opened the window
-      // has resolved (e.g. tab visible again AND window focused again).
       if (awaySignalsRef.current.size > 0 || awaySinceRef.current === null) return;
 
       const durationSec = Math.round((Date.now() - awaySinceRef.current) / 1000);
       awaySinceRef.current = null;
       const severity = severityForDuration(durationSec);
+
+      const isHidden = signal === 'hidden' || document.hidden;
+      const desc = isHidden
+        ? `Switched away to another browser tab or minimized window for ${durationSec}s (Tab switch #${awayCountRef.current})`
+        : `Lost focus to an external desktop application or secondary screen for ${durationSec}s (Focus loss #${awayCountRef.current})`;
+
       logInfraction(
-        'attention_away',
-        `Left the exam window/tab for ${durationSec}s`,
+        'tab_or_window_switch',
+        desc,
         { severity, durationSeconds: durationSec, captureEvidence: true }
       );
+
+      // Malpractice strike for sustained absence or repeated tab-switching
+      if (durationSec >= 8 || awayCountRef.current >= 3) {
+        recordMalpracticeStrike(`Exited exam window (${durationSec}s absence, violation #${awayCountRef.current})`);
+      }
     };
 
     const handleVisibility = () => {
@@ -487,7 +697,7 @@ const StudentFlow = () => {
     };
 
     const handleBlur = () => {
-      if (!isCurrentlyAway()) return; // e.g. clicking a native <select> can blur without leaving
+      if (!isCurrentlyAway()) return;
       openAwayWindow('blur');
     };
 
@@ -496,31 +706,113 @@ const StudentFlow = () => {
     };
 
     const preventCopyPaste = (e) => {
-      // Allow clipboard operations inside essay/answer text fields.
-      // Blocking cut/copy/paste inside a <textarea> or <input> would prevent
-      // students from editing their own typed responses -- which was causing
-      // answers to appear empty when submitted after the timer expired.
       const tag = e.target && e.target.tagName && e.target.tagName.toLowerCase();
-      if (tag === 'textarea' || tag === 'input') return;
+      if (tag === 'textarea' || tag === 'input') {
+        if (e.type === 'paste') {
+          const pastedText = e.clipboardData?.getData('text') || '';
+          if (pastedText.length > 50) {
+            logInfraction(
+              'external_paste_detected',
+              `Pasted large external content (${pastedText.length} chars) into response field: "${pastedText.slice(0, 75)}..."`,
+              { severity: 'medium', captureEvidence: true }
+            );
+          }
+        }
+        return;
+      }
       e.preventDefault();
-      logInfraction('copy_paste', `Clipboard action attempted: ${e.type}`, { severity: 'medium', captureEvidence: true });
+      const sel = window.getSelection()?.toString().trim();
+      const action = e.type.toUpperCase();
+      const detail = sel
+        ? `Attempted to ${action} exam question text: "${sel.slice(0, 80)}..." to clipboard (suspected unauthorized sharing)`
+        : `Attempted clipboard ${action} on exam question interface`;
+
+      logInfraction('unauthorized_clipboard', detail, { severity: 'high', captureEvidence: true });
+      recordMalpracticeStrike(`Attempted unauthorized clipboard ${action} on exam question content`);
     };
 
     const preventContextMenu = (e) => {
       e.preventDefault();
-      // Include what was right-clicked (a question option? the timer? the
-      // page background?) so an examiner sees context, not just an event name.
-      const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : 'unknown';
-      logInfraction('contextmenu', `Right-click (context menu) attempted on <${tag}>`, { severity: 'medium', captureEvidence: true });
+      const sel = window.getSelection()?.toString().trim();
+      const targetTag = e.target?.tagName ? e.target.tagName.toLowerCase() : 'unknown';
+      let targetDesc = `element <${targetTag}>`;
+      if (sel) {
+        targetDesc = `selected text: "${sel.slice(0, 60)}..."`;
+      } else if (e.target?.closest('.question-card') || e.target?.closest('[data-question-text]')) {
+        targetDesc = `exam question panel`;
+      }
+
+      logInfraction(
+        'context_menu_attempt',
+        `Right-click context menu attempted on ${targetDesc} (blocked to prevent developer inspect or external web search)`,
+        { severity: 'medium', captureEvidence: true }
+      );
     };
 
-    // Fullscreen enforcement — this is a deliberate, discrete action (no
-    // "brief flicker" case like blur has), so it's always logged at full
-    // severity with evidence regardless of duration.
+    // Keyboard Shortcuts (DevTools, View Source, Print/Save, Hotkey navigation)
+    const handleKeyDown = (e) => {
+      // 1. F12 Developer Tools
+      if (e.key === 'F12') {
+        e.preventDefault();
+        logInfraction('devtools_attempt', 'Attempted to open Developer Tools via F12 key (action blocked)', { severity: 'high', captureEvidence: true });
+        recordMalpracticeStrike('Attempted to open Developer Tools via F12');
+        return;
+      }
+      // 2. Ctrl+Shift+I / J / C (or Cmd+Option+I / J / C)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'I', 'j', 'J', 'c', 'C'].includes(e.key)) {
+        e.preventDefault();
+        logInfraction('devtools_attempt', `Attempted to open Developer Tools / Inspect Element via shortcut Ctrl+Shift+${e.key.toUpperCase()} (blocked)`, { severity: 'high', captureEvidence: true });
+        recordMalpracticeStrike('Attempted to inspect element or open Developer Tools');
+        return;
+      }
+      // 3. Ctrl+U: View Page Source
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+        logInfraction('source_code_inspection', 'Attempted to view exam page source code via Ctrl+U (blocked)', { severity: 'high', captureEvidence: true });
+        recordMalpracticeStrike('Attempted to inspect page source code');
+        return;
+      }
+      // 4. Ctrl+P / Ctrl+S: Save or Print Exam
+      if ((e.ctrlKey || e.metaKey) && ['s', 'S', 'p', 'P'].includes(e.key)) {
+        e.preventDefault();
+        logInfraction('save_print_attempt', `Attempted unauthorized browser shortcut (Ctrl+${e.key.toUpperCase()}) to save or print exam questions (blocked)`, { severity: 'medium', captureEvidence: true });
+        return;
+      }
+      // 5. Navigation Hotkeys: Alt+Tab, Ctrl+Tab, Ctrl+T, Ctrl+N
+      if (
+        (e.altKey && e.key === 'Tab') ||
+        ((e.ctrlKey || e.metaKey) && ['t', 'T', 'n', 'N', 'w', 'W'].includes(e.key))
+      ) {
+        logInfraction('navigation_hotkey_attempt', `Attempted unauthorized navigation shortcut (${e.altKey ? 'Alt+Tab' : `Ctrl+${e.key.toUpperCase()}`}) to switch tabs or open new window`, { severity: 'medium', captureEvidence: true });
+      }
+    };
+
+    // Fullscreen enforcement
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
-        logInfraction('fullscreen', 'Exited fullscreen mode', { severity: 'high', captureEvidence: true });
+        logInfraction(
+          'fullscreen_exit',
+          `Exited mandatory fullscreen lockdown mode (Screen: ${window.screen.width}x${window.screen.height}, Current Window: ${window.innerWidth}x${window.innerHeight})`,
+          { severity: 'high', captureEvidence: true }
+        );
+        recordMalpracticeStrike('Exited mandatory full-screen lockdown mode');
       }
+    };
+
+    // Split-screen & Window Resizing Detection
+    let resizeDebounce = null;
+    const handleResize = () => {
+      if (resizeDebounce) clearTimeout(resizeDebounce);
+      resizeDebounce = setTimeout(() => {
+        const availW = window.screen.availWidth || window.screen.width;
+        if (window.innerWidth < availW * 0.8) {
+          logInfraction(
+            'window_resized_splitscreen',
+            `Exam window resized to ${window.innerWidth}x${window.innerHeight} on ${availW}x${window.screen.availHeight} monitor (suspected split-screen layout alongside external browser or AI tools)`,
+            { severity: 'medium', captureEvidence: true }
+          );
+        }
+      }, 500);
     };
 
     // Accidental Exit Prevention
@@ -536,7 +828,9 @@ const StudentFlow = () => {
     document.addEventListener("paste", preventCopyPaste);
     document.addEventListener("cut", preventCopyPaste);
     document.addEventListener("contextmenu", preventContextMenu);
+    window.addEventListener("keydown", handleKeyDown);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    window.addEventListener("resize", handleResize);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     // Anti-selection
@@ -544,6 +838,7 @@ const StudentFlow = () => {
     document.body.style.webkitUserSelect = 'none';
 
     return () => {
+      if (resizeDebounce) clearTimeout(resizeDebounce);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
@@ -551,7 +846,9 @@ const StudentFlow = () => {
       document.removeEventListener("paste", preventCopyPaste);
       document.removeEventListener("cut", preventCopyPaste);
       document.removeEventListener("contextmenu", preventContextMenu);
+      window.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      window.removeEventListener("resize", handleResize);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.body.style.userSelect = 'auto';
       document.body.style.webkitUserSelect = 'auto';
@@ -611,23 +908,14 @@ const StudentFlow = () => {
     return () => clearInterval(interval);
   }, [examState, activeExam?.id, user?.id]);
 
-  // Release the camera whenever we leave the exam-taking screen, for ANY
-  // reason — manual submit, auto-submit, or the examiner force-closing the
-  // assessment mid-exam. This is deliberately its own effect keyed on
-  // examState rather than relying on every exit path in submitExam() to
-  // remember to call stopWebcam() itself: the "assessment closed by the
-  // examiner" branch was doing exactly that — transitioning to 'finished'
-  // without ever stopping the stream — which would have left a student's
-  // webcam recording indefinitely after their exam was forcibly ended,
-  // until they closed the tab entirely.
+  // Release the screen capture & camera whenever we leave the exam-taking screen
   useEffect(() => {
-    if (examState !== 'taking_exam') stopWebcam();
+    if (examState !== 'taking_exam') stopProctoringStreams();
   }, [examState]);
 
-  // Safety net: also release it if the component unmounts entirely while
-  // still mid-exam (hard browser close, crash, SPA-level navigation away).
+  // Safety net: also release streams if the component unmounts entirely
   useEffect(() => {
-    return () => stopWebcam();
+    return () => stopProctoringStreams();
   }, []);
 
 const advanceCategoryOrSubmit = (isManual = false, fromCategoryIndex = null) => {
@@ -845,7 +1133,7 @@ useEffect(() => {
       return;
     }
 
-    stopWebcam();
+    stopProctoringStreams();
 
     // Clear auto-save cache upon successful submission
     const draftKey = `zibi_exam_draft_${activeExam.id}`;
@@ -1059,8 +1347,19 @@ useEffect(() => {
                   </p>
                 </div>
 
-                <p style={{ color: 'var(--text-muted, #bbb)', fontSize: '0.88rem', textAlign: 'center', marginBottom: '1.75rem', lineHeight: 1.6 }}>
-                  Once you begin, the countdown timer will start immediately and <strong style={{ color: 'var(--text-primary, #fff)' }}>cannot be paused</strong>. Make sure you are ready before proceeding.
+                <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '0.85rem', marginBottom: '1.25rem', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f87171', fontWeight: 'bold', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                    <span>🛡️</span> STRICT PROCTORING &amp; ZERO-TOLERANCE POLICY
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#d4d4d8', fontSize: '0.78rem', lineHeight: '1.5' }}>
+                    <li><strong>Entire Screen Capture:</strong> You must share your entire screen. Continuous snapshots are recorded every 5 seconds.</li>
+                    <li><strong>Strict Anti-Cheat:</strong> Tab switching, window minimization, DevTools shortcuts (F12, Ctrl+Shift+I), right-clicking, and question copying are prohibited.</li>
+                    <li><strong>Automatic Forfeiture:</strong> Violations incur strikes. Reaching 3 strikes results in immediate <strong>exam forfeiture (Score: 0) and student portal suspension</strong>.</li>
+                  </ul>
+                </div>
+
+                <p style={{ color: 'var(--text-muted, #bbb)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+                  Once you begin, you will be prompted to select your <strong>Entire Screen</strong> for sharing. Make sure all other applications are closed.
                 </p>
 
                 {/* Actions */}
@@ -1089,7 +1388,7 @@ useEffect(() => {
                     onClick={() => { setConfirmExam(null); startExam(confirmExam); }}
                     style={{ flex: 1, padding: '0.75rem', fontSize: '0.9rem' }}
                   >
-                    ✅ Confirm &amp; Begin
+                    🖥️ Share Screen &amp; Begin
                   </button>
                 </div>
               </div>
@@ -1100,6 +1399,68 @@ useEffect(() => {
 
         {examState === 'taking_exam' && activeExam && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
+            {/* Screen Share Interrupted Blocking Overlay */}
+            {screenShareLost && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
+                <div style={{ background: '#18181b', border: '2px solid #ef4444', borderRadius: '12px', padding: '2rem', maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(239,68,68,0.3)' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+                  <h3 style={{ color: '#ef4444', fontSize: '1.35rem', marginBottom: '0.75rem', fontWeight: 'bold' }}>Screen Sharing Interrupted!</h3>
+                  <p style={{ color: '#e4e4e7', fontSize: '0.92rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+                    Proctoring rules strictly require continuous screen capture throughout your exam. Stopping screen share constitutes an examination malpractice strike.
+                  </p>
+                  <button
+                    onClick={reenableScreenShare}
+                    className="btn-premium primary"
+                    style={{ width: '100%', padding: '0.85rem', fontSize: '1rem', background: '#ef4444', borderColor: '#ef4444', color: '#fff', fontWeight: 'bold' }}
+                  >
+                    🖥️ Re-Share Entire Screen Now
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Malpractice Strikes Warning Banner */}
+            {malpracticeStrikes > 0 && (
+              <div style={{
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid #ef4444',
+                borderRadius: '8px',
+                padding: '0.75rem 1.25rem',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem',
+                animation: 'pulse 2s infinite'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>🚨</span>
+                  <div>
+                    <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                      MALPRACTICE WARNING: Strike {malpracticeStrikes} of {MAX_MALPRACTICE_STRIKES} Issued!
+                    </div>
+                    <div style={{ color: '#fca5a5', fontSize: '0.8rem' }}>
+                      Reaching {MAX_MALPRACTICE_STRIKES} strikes will immediately terminate your exam with a score of ZERO and suspend your portal account.
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  {Array.from({ length: MAX_MALPRACTICE_STRIKES }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        borderRadius: '50%',
+                        background: idx < malpracticeStrikes ? '#ef4444' : 'rgba(255,255,255,0.15)',
+                        border: '1px solid rgba(255,255,255,0.3)'
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}>
               <div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
@@ -1110,7 +1471,11 @@ useEffect(() => {
                     </span>
                   )}
                 </div>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Proctoring Engine: <span style={{ color: '#4ade80' }}>Active &amp; Recording</span></span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  <span>Proctoring Engine: <span style={{ color: '#4ade80', fontWeight: '600' }}>Active &amp; Recording Screen (5s Snapshots)</span></span>
+                  <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+                  <span style={{ color: '#38bdf8' }}>Face Verification: In-Frame</span>
+                </div>
                 {activeExam.instructions && (
                   <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(197,160,89,0.08)', border: '1px solid var(--border-focus)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
                     <strong style={{ color: 'var(--accent-gold)' }}>Instructions:</strong> {activeExam.instructions}
@@ -1400,6 +1765,38 @@ useEffect(() => {
             <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.95rem' }}>Your encrypted script has been securely saved and submitted to the evaluation matrix.</p>
 
             <button className="btn-premium primary" style={{ width: '100%', maxWidth: '400px' }} onClick={() => { setExamState('dashboard'); setAnswers({}); setActiveExam(null); }}>Return to Dashboard</button>
+          </div>
+        )}
+
+        {examState === 'forfeited' && (
+          <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', maxWidth: '640px', margin: '0 auto', animation: 'fadeIn 0.5s ease-out' }}>
+            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(239,68,68,0.15)', border: '3px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', margin: '0 auto 1.5rem' }}>
+              ⛔
+            </div>
+            <h2 style={{ color: '#ef4444', fontSize: '1.85rem', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)' }}>
+              Examination Forfeited &amp; Student Suspended
+            </h2>
+            <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.75rem', textAlign: 'left' }}>
+              <p style={{ color: '#fca5a5', fontWeight: 'bold', margin: '0 0 0.5rem', fontSize: '0.95rem' }}>
+                Malpractice Disciplinary Reason:
+              </p>
+              <p style={{ color: '#e4e4e7', fontSize: '0.9rem', margin: 0, lineHeight: 1.5 }}>
+                {forfeitedReason || 'Multiple severe anti-cheat infractions and proctoring violations detected.'}
+              </p>
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: '2rem' }}>
+              In accordance with academic integrity guidelines, your assessment score has been set to <strong>0</strong> and your student portal access has been flagged and suspended. Complete proctoring screen snapshots and audit logs have been transmitted to the institution's examination committee.
+            </p>
+            <button
+              className="btn-premium"
+              style={{ borderColor: 'rgba(255,255,255,0.2)', color: 'var(--text-ivory)', padding: '0.75rem 2rem' }}
+              onClick={() => {
+                supabase.auth.signOut();
+                window.location.reload();
+              }}
+            >
+              Sign Out of Portal
+            </button>
           </div>
         )}
 

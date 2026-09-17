@@ -2,7 +2,8 @@
   "name": "DTMD Academy",
   "description": "Academy portal for candidates, examiners, and administrators with course management and proctored exam flows.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "display-capture"
   ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
