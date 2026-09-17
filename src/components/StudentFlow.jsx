@@ -5,6 +5,8 @@ import { toast } from 'react-hot-toast';
 
 const cipherKey = (uid) => uid.replace(/-/g, '').substring(0, 32);
 
+const getCurrentTimestamp = () => Date.now();
+
 const encrypt = (text, key) => {
   const data = new TextEncoder().encode(text);
   const k = new TextEncoder().encode(key);
@@ -60,6 +62,9 @@ const StudentFlow = () => {
 
   // Strict Malpractice & Proctoring State
   const [screenShareLost, setScreenShareLost] = useState(false);
+  const [fullscreenLost, setFullscreenLost] = useState(false);
+  const [sectionConfirmModal, setSectionConfirmModal] = useState({ open: false, curName: '', nextName: '' });
+  const [submitConfirmModal, setSubmitConfirmModal] = useState({ open: false, unansweredCount: 0 });
   const [malpracticeStrikes, setMalpracticeStrikes] = useState(0);
   const [forfeitedReason, setForfeitedReason] = useState('');
   const MAX_MALPRACTICE_STRIKES = 3;
@@ -83,6 +88,7 @@ const StudentFlow = () => {
   const awaySinceRef = React.useRef(null);
   const awaySignalsRef = React.useRef(new Set());
   const awayCountRef = React.useRef(0);
+  const genuineAwayCountRef = React.useRef(0);
 
   const stopProctoringStreams = () => {
     if (screenStreamRef.current) {
@@ -660,7 +666,6 @@ const StudentFlow = () => {
       awaySignalsRef.current.add(signal);
       if (awaySinceRef.current === null) {
         awaySinceRef.current = Date.now();
-        awayCountRef.current = (awayCountRef.current || 0) + 1;
         // Immediately capture evidence frame of the screen upon leaving
         captureSnapshot('navigated_away', true);
       }
@@ -672,12 +677,19 @@ const StudentFlow = () => {
 
       const durationSec = Math.round((Date.now() - awaySinceRef.current) / 1000);
       awaySinceRef.current = null;
+
+      // Discard micro-absences (< 2s) which happen naturally from clicks or system focus changes
+      if (durationSec < MIN_LOGGABLE_SEC) {
+        return;
+      }
+
+      genuineAwayCountRef.current = (genuineAwayCountRef.current || 0) + 1;
       const severity = severityForDuration(durationSec);
 
       const isHidden = signal === 'hidden' || document.hidden;
       const desc = isHidden
-        ? `Switched away to another browser tab or minimized window for ${durationSec}s (Tab switch #${awayCountRef.current})`
-        : `Lost focus to an external desktop application or secondary screen for ${durationSec}s (Focus loss #${awayCountRef.current})`;
+        ? `Switched away to another browser tab or minimized window for ${durationSec}s (Tab switch #${genuineAwayCountRef.current})`
+        : `Lost focus to an external desktop application or secondary screen for ${durationSec}s (Focus loss #${genuineAwayCountRef.current})`;
 
       logInfraction(
         'tab_or_window_switch',
@@ -685,9 +697,9 @@ const StudentFlow = () => {
         { severity, durationSeconds: durationSec, captureEvidence: true }
       );
 
-      // Malpractice strike for sustained absence or repeated tab-switching
-      if (durationSec >= 8 || awayCountRef.current >= 3) {
-        recordMalpracticeStrike(`Exited exam window (${durationSec}s absence, violation #${awayCountRef.current})`);
+      // Malpractice strike ONLY for sustained absence (>= 15s) or repeated genuine tab switching (>= 3 times of >= 4s)
+      if (durationSec >= 15 || (genuineAwayCountRef.current >= 3 && durationSec >= 4)) {
+        recordMalpracticeStrike(`Exited exam window (${durationSec}s absence, violation #${genuineAwayCountRef.current})`);
       }
     };
 
@@ -789,13 +801,16 @@ const StudentFlow = () => {
 
     // Fullscreen enforcement
     const handleFullscreenChange = () => {
+      if (examStateRef.current !== 'taking_exam') return;
       if (!document.fullscreenElement) {
+        setFullscreenLost(true);
         logInfraction(
           'fullscreen_exit',
-          `Exited mandatory fullscreen lockdown mode (Screen: ${window.screen.width}x${window.screen.height}, Current Window: ${window.innerWidth}x${window.innerHeight})`,
-          { severity: 'high', captureEvidence: true }
+          `Exited fullscreen display mode (Screen: ${window.screen.width}x${window.screen.height}, Current Window: ${window.innerWidth}x${window.innerHeight})`,
+          { severity: 'medium', captureEvidence: true }
         );
-        recordMalpracticeStrike('Exited mandatory full-screen lockdown mode');
+      } else {
+        setFullscreenLost(false);
       }
     };
 
@@ -930,7 +945,7 @@ const advanceCategoryOrSubmit = (isManual = false, fromCategoryIndex = null) => 
   // remaining time so the student can come back and continue it (spec:
   // leave = pause, return = continue). On timer expiry it's already 0.
   if (st[currentCatKey].runningAt !== null) {
-    const elapsed = Math.floor((Date.now() - st[currentCatKey].runningAt) / 1000);
+    const elapsed = Math.floor((getCurrentTimestamp() - st[currentCatKey].runningAt) / 1000);
     st[currentCatKey] = { remaining: Math.max(0, st[currentCatKey].remaining - elapsed), runningAt: null };
   }
   // (expiry path already set remaining 0 + runningAt null before calling)
@@ -947,11 +962,11 @@ const nextIndex = srcIdx + 1;
     // they return... but actually for simplicity we'll start it running
     // immediately as the "working section" - the viewer will be yanked to it.
     if (st[nextCatKey].runningAt === null) {
-      st[nextCatKey] = { ...st[nextCatKey], runningAt: Date.now() };
+      st[nextCatKey] = { ...st[nextCatKey], runningAt: getCurrentTimestamp() };
     }
     // Compute remaining time for display (accounting for elapsed if running)
     const t = st[nextCatKey];
-    const displayRemaining = t.runningAt !== null ? Math.max(0, t.remaining - Math.floor((Date.now() - t.runningAt) / 1000)) : t.remaining;
+    const displayRemaining = t.runningAt !== null ? Math.max(0, t.remaining - Math.floor((getCurrentTimestamp() - t.runningAt) / 1000)) : t.remaining;
     setCategoryTimeLeft(displayRemaining);
 
     setActiveCategoryIndex(nextIndex);
@@ -1002,20 +1017,20 @@ useEffect(() => {
     for (const k of ['mcq', 'true_false', 'short_essay']) {
       if (k === runningKey) continue;
       if (st[k].runningAt !== null) {
-        const elapsed = Math.floor((Date.now() - st[k].runningAt) / 1000);
+        const elapsed = Math.floor((getCurrentTimestamp() - st[k].runningAt) / 1000);
         st[k] = { remaining: Math.max(0, st[k].remaining - elapsed), runningAt: null };
       }
     }
 
     // Resume the designated running section if it has time and isn't already running
     if (st[runningKey].remaining > 0 && st[runningKey].runningAt === null) {
-      st[runningKey] = { ...st[runningKey], runningAt: Date.now() };
+      st[runningKey] = { ...st[runningKey], runningAt: getCurrentTimestamp() };
     }
 
     const tick = () => {
       const t = sectionTimersRef.current[runningKey];
       if (t.runningAt === null) return; // section is paused
-      const elapsed = Math.floor((Date.now() - t.runningAt) / 1000);
+      const elapsed = Math.floor((getCurrentTimestamp() - t.runningAt) / 1000);
       const remaining = Math.max(0, t.remaining - elapsed);
 
       if (viewedHasTime) {
@@ -1078,7 +1093,7 @@ useEffect(() => {
   }
 }, [examState, isBlended, activeCategoryIndex, categorySequence]);
 
-  const submitExam = async (isAutoSubmit = false) => {
+  const submitExam = async (isAutoSubmit = false, skipConfirmation = false) => {
     if (!activeExam || !user) return;
 
     const { data: freshExam } = await supabase.from('assessments').select('is_open').eq('id', activeExam.id).single();
@@ -1088,11 +1103,10 @@ useEffect(() => {
       return;
     }
 
-    if (!isAutoSubmit) {
+    if (!isAutoSubmit && !skipConfirmation) {
       const unanswered = questions.filter(q => !answers[q.id] || String(answers[q.id]).trim() === '');
-      if (unanswered.length > 0 && !window.confirm(`You have ${unanswered.length} unanswered question(s). Submit anyway?`)) {
-        return;
-      }
+      setSubmitConfirmModal({ open: true, unansweredCount: unanswered.length });
+      return;
     }
 
     let mcqScore = 0;
@@ -1347,20 +1361,14 @@ useEffect(() => {
                   </p>
                 </div>
 
-                <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', padding: '0.85rem', marginBottom: '1.25rem', textAlign: 'left' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f87171', fontWeight: 'bold', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
-                    <span>🛡️</span> STRICT PROCTORING &amp; ZERO-TOLERANCE POLICY
+                <div style={{ background: 'rgba(255, 195, 0, 0.08)', border: '1px solid rgba(255, 195, 0, 0.25)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1.25rem', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold, #ffc300)', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                    <span>🖥️</span> Screen Capture Notice
                   </div>
-                  <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#d4d4d8', fontSize: '0.78rem', lineHeight: '1.5' }}>
-                    <li><strong>Entire Screen Capture:</strong> You must share your entire screen. Continuous snapshots are recorded every 5 seconds.</li>
-                    <li><strong>Strict Anti-Cheat:</strong> Tab switching, window minimization, DevTools shortcuts (F12, Ctrl+Shift+I), right-clicking, and question copying are prohibited.</li>
-                    <li><strong>Automatic Forfeiture:</strong> Violations incur strikes. Reaching 3 strikes results in immediate <strong>exam forfeiture (Score: 0) and student portal suspension</strong>.</li>
-                  </ul>
+                  <p style={{ margin: 0, color: 'var(--text-muted, #ccc)', fontSize: '0.82rem', lineHeight: '1.5' }}>
+                    During this assessment, you will be prompted to share your screen for proctoring verification. Please ensure you select your entire screen.
+                  </p>
                 </div>
-
-                <p style={{ color: 'var(--text-muted, #bbb)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '1.5rem', lineHeight: 1.5 }}>
-                  Once you begin, you will be prompted to select your <strong>Entire Screen</strong> for sharing. Make sure all other applications are closed.
-                </p>
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -1414,6 +1422,35 @@ useEffect(() => {
                     style={{ width: '100%', padding: '0.85rem', fontSize: '1rem', background: '#ef4444', borderColor: '#ef4444', color: '#fff', fontWeight: 'bold' }}
                   >
                     🖥️ Re-Share Entire Screen Now
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Fullscreen Mode Exited Recovery Overlay */}
+            {fullscreenLost && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(6px)' }}>
+                <div style={{ background: '#18181b', border: '1px solid var(--accent-gold, #ffc300)', borderRadius: '12px', padding: '2rem', maxWidth: '460px', width: '100%', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.7)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>⛶</div>
+                  <h3 style={{ color: 'var(--accent-gold, #ffc300)', fontSize: '1.25rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>Fullscreen Mode Required</h3>
+                  <p style={{ color: '#e4e4e7', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.5rem' }}>
+                    Your examination must remain in fullscreen mode. Please click below to resume your assessment.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        if (document.documentElement.requestFullscreen) {
+                          await document.documentElement.requestFullscreen();
+                        }
+                      } catch (err) {
+                        console.warn('Could not re-enter fullscreen:', err);
+                      }
+                      setFullscreenLost(false);
+                    }}
+                    className="btn-premium primary"
+                    style={{ width: '100%', padding: '0.85rem', fontSize: '0.95rem', fontWeight: 600 }}
+                  >
+                    Re-enter Fullscreen Mode
                   </button>
                 </div>
               </div>
@@ -1735,9 +1772,7 @@ useEffect(() => {
                     const catNames = { mcq: 'Multiple Choice (MCQ)', true_false: 'True or False', short_essay: 'Short Essay' };
                     const curName = catNames[categorySequence[activeCategoryIndex]];
                     const nextName = catNames[categorySequence[activeCategoryIndex + 1]];
-                    if (window.confirm(`Proceed from ${curName} to ${nextName}? You can still come back to review this section during the exam.`)) {
-                      advanceCategoryOrSubmit(true);
-                    }
+                    setSectionConfirmModal({ open: true, curName, nextName });
                   }}
                 >
                   ✅ Save Section &amp; Proceed to Next Category &rarr;
@@ -1747,15 +1782,123 @@ useEffect(() => {
                   className="btn-premium"
                   style={{ borderColor: '#ef4444', color: '#ef4444', width: '100%', maxWidth: '320px', padding: '0.85rem' }}
                   onClick={() => {
-                    if (window.confirm("Are you sure you want to submit your final assessment? You cannot return to this exam once submitted.")) {
-                      submitExam();
-                    }
+                    const unanswered = questions.filter(q => !answers[q.id] || String(answers[q.id]).trim() === '');
+                    setSubmitConfirmModal({ open: true, unansweredCount: unanswered.length });
                   }}
                 >
                   🏁 Submit Final Assessment
                 </button>
               )}
             </div>
+
+            {/* Section Transition In-App Modal */}
+            {sectionConfirmModal.open && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(5px)' }}>
+                <div style={{ background: '#18181b', border: '1px solid var(--accent-gold, #ffc300)', borderRadius: '12px', padding: '1.75rem', maxWidth: '460px', width: '100%', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
+                  <div style={{ fontSize: '2.25rem', marginBottom: '0.75rem' }}>📑</div>
+                  <h3 style={{ color: '#fff', fontSize: '1.2rem', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
+                    Proceed to Next Section?
+                  </h3>
+                  <p style={{ color: '#d4d4d8', fontSize: '0.88rem', lineHeight: '1.5', marginBottom: '1.5rem' }}>
+                    Proceed from <strong style={{ color: 'var(--accent-gold, #ffc300)' }}>{sectionConfirmModal.curName}</strong> to <strong style={{ color: 'var(--accent-gold, #ffc300)' }}>{sectionConfirmModal.nextName}</strong>? You can still return to review this section during the exam.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      onClick={() => setSectionConfirmModal({ open: false, curName: '', nextName: '' })}
+                      style={{
+                        flex: 1,
+                        padding: '0.75rem',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        background: 'transparent',
+                        color: 'var(--text-muted, #aaa)',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn-premium primary"
+                      style={{ flex: 1, padding: '0.75rem', fontSize: '0.9rem' }}
+                      onClick={() => {
+                        setSectionConfirmModal({ open: false, curName: '', nextName: '' });
+                        advanceCategoryOrSubmit(true);
+                      }}
+                    >
+                      Yes, Proceed &rarr;
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Final Submission In-App Modal */}
+            {submitConfirmModal.open && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(5px)' }}>
+                <div style={{ background: '#18181b', border: '1px solid #ef4444', borderRadius: '12px', padding: '1.75rem', maxWidth: '460px', width: '100%', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
+                  <div style={{ fontSize: '2.25rem', marginBottom: '0.75rem' }}>🏁</div>
+                  <h3 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '0.5rem', fontFamily: 'var(--font-heading)' }}>
+                    Submit Final Assessment?
+                  </h3>
+                  {submitConfirmModal.unansweredCount > 0 ? (
+                    <div style={{
+                      background: 'rgba(239,68,68,0.1)',
+                      border: '1px solid rgba(239,68,68,0.3)',
+                      borderRadius: '8px',
+                      padding: '0.75rem',
+                      marginBottom: '1.25rem',
+                      color: '#fca5a5',
+                      fontSize: '0.85rem',
+                      lineHeight: '1.4'
+                    }}>
+                      ⚠️ You have <strong>{submitConfirmModal.unansweredCount} unanswered question(s)</strong>. Are you sure you want to submit? You cannot return to this exam once submitted.
+                    </div>
+                  ) : (
+                    <p style={{ color: '#d4d4d8', fontSize: '0.88rem', lineHeight: '1.5', marginBottom: '1.5rem' }}>
+                      Are you sure you want to submit your final assessment? You cannot return to this exam once submitted.
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      onClick={() => setSubmitConfirmModal({ open: false, unansweredCount: 0 })}
+                      style={{
+                        flex: 1,
+                        padding: '0.75rem',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        background: 'transparent',
+                        color: 'var(--text-muted, #aaa)',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                      Return to Exam
+                    </button>
+                    <button
+                      className="btn-premium"
+                      style={{
+                        flex: 1,
+                        padding: '0.75rem',
+                        fontSize: '0.9rem',
+                        borderColor: '#ef4444',
+                        background: 'rgba(239,68,68,0.2)',
+                        color: '#fca5a5',
+                        fontWeight: 600
+                      }}
+                      onClick={() => {
+                        setSubmitConfirmModal({ open: false, unansweredCount: 0 });
+                        submitExam(false, true);
+                      }}
+                    >
+                      Confirm &amp; Submit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

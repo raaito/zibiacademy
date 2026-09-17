@@ -53,10 +53,14 @@ export const AuthProvider = ({ children }) => {
         .eq('id', userId);
 
       if (error) {
-        console.error("Error fetching profile:", error);
-        setError(error.message);
+        console.warn("Error fetching profile:", error);
+        if (!profileRef.current) {
+          setError(error.message);
+        }
       } else if (!data || data.length === 0) {
-        setError(`No profile found for UID: ${userId.substring(0, 8)}... Please verify your database records.`);
+        if (!profileRef.current) {
+          setError(`No profile found for UID: ${userId.substring(0, 8)}... Please verify your database records.`);
+        }
       } else if (data.length > 1) {
         console.warn("Multiple profiles found for user:", userId);
         setProfile(data[0]);
