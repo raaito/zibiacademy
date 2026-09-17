@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import JSZip from 'jszip';
 
 const ExaminerFlow = () => {
   const { user, profile } = useAuth();
@@ -55,6 +56,10 @@ const ExaminerFlow = () => {
   const [lightboxSnapshot, setLightboxSnapshot] = useState(null);
   const [isPlayingReel, setIsPlayingReel] = useState(false);
   const [activeReelIndex, setActiveReelIndex] = useState(0);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [confirmPurgeCandidate, setConfirmPurgeCandidate] = useState(false);
+  const [externalBackupUrl, setExternalBackupUrl] = useState('');
+  const [savingBackupUrl, setSavingBackupUrl] = useState(false);
 
   // Access modal & Unwritten candidates state
   const [accessModal, setAccessModal] = useState(null); // { assessment } | null
@@ -407,6 +412,167 @@ const ExaminerFlow = () => {
       console.error('Failed to load proctoring snapshots:', err);
     } finally {
       setSnapshotsLoading(false);
+    }
+  };
+
+  const downloadAllSnapshotsZip = async (candidateScript, assessment) => {
+    if (!allSnapshots || allSnapshots.length === 0) {
+      return toast.error('No snapshot images available to download.');
+    }
+    setIsDownloadingZip(true);
+    const toastId = toast.loading(`Preparing ZIP archive of ${allSnapshots.length} snapshot frames...`);
+    try {
+      const zip = new JSZip();
+      const candName = candidateScript?.profiles?.full_name || 'Candidate';
+      const matricNo = candidateScript?.profiles?.matriculation_number || candidateScript?.candidate_id?.slice(0, 8) || 'student';
+      const courseCode = assessment?.course_code || 'Assessment';
+      const folderName = `${matricNo}_${courseCode}_proctoring_evidence`;
+      const folder = zip.folder(folderName);
+
+      // Audit summary report inside ZIP
+      const summaryContent = [
+        `================================================================`,
+        `ZIBI ACADEMY PROCTORING SURVEILLANCE ARCHIVE`,
+        `================================================================`,
+        `Candidate Name:        ${candName}`,
+        `Matriculation Number:  ${matricNo}`,
+        `Assessment:            ${courseCode} - ${assessment?.course_name || ''}`,
+        `Archive Generated At:  ${new Date().toLocaleString()}`,
+        `Total Snapshot Frames: ${allSnapshots.length}`,
+        `Infraction Events:     ${scriptInfractions.length}`,
+        `----------------------------------------------------------------`,
+        `SNAPSHOT FRAMES INDEX:`,
+        ...allSnapshots.map((s, idx) => `[Frame #${idx + 1}]  ${s.name}  |  Trigger: ${s.trigger}  |  Captured: ${s.fullDateStr}`),
+        `\n----------------------------------------------------------------`,
+        `INFRACTIONS LOG INDEX:`,
+        ...scriptInfractions.map((inf, idx) => `[Infraction #${idx + 1}]  ${inf.infraction_type} (${inf.severity || 'low'}) at ${new Date(inf.logged_at).toLocaleTimeString()}: ${inf.details}`)
+      ].join('\n');
+
+      folder.file('PROCTORING_AUDIT_REPORT.txt', summaryContent);
+
+      // Fetch images in chunks of 6 to avoid browser network limits
+      let successCount = 0;
+      const CHUNK_SIZE = 6;
+      for (let i = 0; i < allSnapshots.length; i += CHUNK_SIZE) {
+        const slice = allSnapshots.slice(i, i + CHUNK_SIZE);
+        toast.loading(`Downloading frames ${i + 1} - ${Math.min(i + CHUNK_SIZE, allSnapshots.length)} of ${allSnapshots.length}...`, { id: toastId });
+        await Promise.all(
+          slice.map(async (snap, sliceIdx) => {
+            const overallIdx = i + sliceIdx + 1;
+            try {
+              let blob = null;
+              const { data: dlData, error: dlErr } = await supabase.storage
+                .from('proctoring-evidence')
+                .download(snap.path);
+              if (!dlErr && dlData) {
+                blob = dlData;
+              } else if (snap.signedUrl) {
+                const resp = await fetch(snap.signedUrl);
+                if (resp.ok) blob = await resp.blob();
+              }
+              if (blob) {
+                const cleanFileName = `frame_${String(overallIdx).padStart(4, '0')}_${snap.rawTrigger}_${snap.name}`;
+                folder.file(cleanFileName, blob);
+                successCount++;
+              }
+            } catch (err) {
+              console.warn(`Could not include frame ${snap.name} in zip:`, err);
+            }
+          })
+        );
+      }
+
+      toast.loading(`Compressing ${successCount} frames into ZIP archive...`, { id: toastId });
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      const blobUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${matricNo}_${courseCode}_Proctoring_Evidence_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+
+      toast.success(
+        `Downloaded ${successCount} snapshot frames as ZIP! You can now upload this archive directly into TeraBox, Google Drive, or your preferred storage.`,
+        { id: toastId, duration: 7000 }
+      );
+    } catch (err) {
+      toast.error(`ZIP creation failed: ${err.message}`, { id: toastId });
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
+  const deleteSingleSnapshot = async (snapshot) => {
+    if (!window.confirm(`Permanently delete snapshot "${snapshot.name}" from cloud storage?`)) return;
+    const toastId = toast.loading('Deleting snapshot from storage...');
+    try {
+      const { error } = await supabase.storage
+        .from('proctoring-evidence')
+        .remove([snapshot.path]);
+      if (error) throw error;
+      setAllSnapshots(prev => prev.filter(s => s.path !== snapshot.path));
+      if (lightboxSnapshot?.path === snapshot.path) {
+        setLightboxSnapshot(null);
+      }
+      toast.success('Snapshot deleted from cloud storage.', { id: toastId });
+    } catch (err) {
+      toast.error('Failed to delete snapshot: ' + err.message, { id: toastId });
+    }
+  };
+
+  const purgeAllCandidateSnapshots = async (candidateId, assessmentId) => {
+    const toastId = toast.loading('Purging all snapshots from cloud storage...');
+    try {
+      const folderPath = `${candidateId}/${assessmentId}`;
+      const { data: files, error: listError } = await supabase.storage
+        .from('proctoring-evidence')
+        .list(folderPath, { limit: 1000 });
+      if (listError) throw listError;
+
+      const pathsToRemove = (files || [])
+        .filter(f => f.name && !f.name.startsWith('.'))
+        .map(f => `${folderPath}/${f.name}`);
+
+      if (pathsToRemove.length > 0) {
+        const { error: removeError } = await supabase.storage
+          .from('proctoring-evidence')
+          .remove(pathsToRemove);
+        if (removeError) throw removeError;
+      }
+
+      setAllSnapshots([]);
+      setConfirmPurgeCandidate(false);
+      if (lightboxSnapshot) setLightboxSnapshot(null);
+      toast.success(`Purged ${pathsToRemove.length} snapshots! Server storage successfully reclaimed.`, { id: toastId, duration: 6000 });
+    } catch (err) {
+      toast.error('Failed to purge snapshots: ' + err.message, { id: toastId });
+    }
+  };
+
+  const saveExternalBackupUrl = (candidateId, assessmentId, url) => {
+    setSavingBackupUrl(true);
+    try {
+      const key = `zibi_terabox_backup_${candidateId}_${assessmentId}`;
+      if (url && url.trim()) {
+        localStorage.setItem(key, url.trim());
+        setExternalBackupUrl(url.trim());
+        toast.success('External cloud storage archive link saved!');
+      } else {
+        localStorage.removeItem(key);
+        setExternalBackupUrl('');
+        toast.success('External cloud storage archive link cleared.');
+      }
+    } catch (err) {
+      toast.error('Failed to save link: ' + err.message);
+    } finally {
+      setSavingBackupUrl(false);
     }
   };
 
@@ -1455,6 +1621,8 @@ const ExaminerFlow = () => {
                               setIsPlayingReel(false);
                               setActiveReelIndex(0);
                               setProctoringActiveTab('snapshots');
+                              const savedBackupKey = `zibi_terabox_backup_${s.candidate_id}_${selectedAssessmentId}`;
+                              setExternalBackupUrl(localStorage.getItem(savedBackupKey) || '');
                               fetchInfractions(s.candidate_id, selectedAssessmentId);
                               fetchAllProctoringSnapshots(s.candidate_id, selectedAssessmentId);
                               if (gradingQuestions.length === 0) fetchGradingQuestions(selectedAssessmentId);
@@ -1693,6 +1861,115 @@ const ExaminerFlow = () => {
                   {/* TAB 1: CONTINUOUS SCREEN SNAPSHOTS */}
                   {proctoringActiveTab === 'snapshots' && (
                     <div>
+                      {/* External Cloud Storage & Archiving Toolbar */}
+                      <div style={{
+                        marginBottom: '1rem',
+                        padding: '1rem 1.25rem',
+                        background: 'linear-gradient(135deg, rgba(20,20,30,0.9) 0%, rgba(15,23,42,0.8) 100%)',
+                        border: '1px solid rgba(197,160,89,0.3)',
+                        borderRadius: '6px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <div>
+                            <h4 style={{ color: 'var(--accent-gold)', margin: '0 0 0.2rem 0', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span>☁️ Cloud Storage Archival &amp; Server Maintenance</span>
+                            </h4>
+                            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                              To save server storage space, download all 5-second snapshots in 1-click as a ZIP, upload them to <strong>TeraBox</strong> (or Google Drive/OneDrive), save the link below, and purge server copies.
+                            </p>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => downloadAllSnapshotsZip(activeScript, assessments.find(a => a.id === selectedAssessmentId))}
+                              disabled={isDownloadingZip || allSnapshots.length === 0}
+                              className="btn-premium"
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '0.8rem',
+                                color: '#38bdf8',
+                                borderColor: 'rgba(56,189,248,0.4)',
+                                opacity: (isDownloadingZip || allSnapshots.length === 0) ? 0.5 : 1
+                              }}
+                              title="Download all snapshots and audit log compressed into a single .zip file for uploading to TeraBox"
+                            >
+                              {isDownloadingZip ? '⏳ Bundling ZIP...' : `📦 Download All as ZIP (${allSnapshots.length})`}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setConfirmPurgeCandidate(true)}
+                              disabled={allSnapshots.length === 0}
+                              className="btn-premium"
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '0.8rem',
+                                color: '#f87171',
+                                borderColor: 'rgba(248,113,113,0.4)',
+                                opacity: allSnapshots.length === 0 ? 0.5 : 1
+                              }}
+                              title="Delete all snapshots from Supabase storage to reclaim server quota"
+                            >
+                              🧹 Purge Server Images
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* External TeraBox / Cloud Link Input & Status */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', background: 'rgba(0,0,0,0.4)', padding: '0.6rem 0.75rem', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-ivory)', whiteSpace: 'nowrap' }}>
+                            📁 External Archive Link:
+                          </span>
+                          <input
+                            type="url"
+                            value={externalBackupUrl}
+                            onChange={(e) => setExternalBackupUrl(e.target.value)}
+                            placeholder="Paste TeraBox share link (e.g. https://terabox.com/s/1xyz...) or Google Drive URL"
+                            style={{
+                              flex: 1,
+                              minWidth: '240px',
+                              padding: '0.35rem 0.6rem',
+                              fontSize: '0.78rem',
+                              background: 'var(--bg-obsidian)',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: '3px',
+                              color: 'var(--text-ivory)'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => saveExternalBackupUrl(activeScript.candidate_id, selectedAssessmentId, externalBackupUrl)}
+                            disabled={savingBackupUrl}
+                            className="btn-premium"
+                            style={{ padding: '0.35rem 0.7rem', fontSize: '0.78rem' }}
+                          >
+                            {savingBackupUrl ? 'Saving...' : '💾 Save Link'}
+                          </button>
+                          {externalBackupUrl && (
+                            <a
+                              href={externalBackupUrl.startsWith('http') ? externalBackupUrl : `https://${externalBackupUrl}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem',
+                                padding: '0.35rem 0.7rem',
+                                fontSize: '0.78rem',
+                                background: 'rgba(56,189,248,0.15)',
+                                border: '1px solid rgba(56,189,248,0.3)',
+                                color: '#38bdf8',
+                                borderRadius: '3px',
+                                textDecoration: 'none'
+                              }}
+                            >
+                              <span>↗ Open Cloud Archive</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', padding: '0.75rem 1rem', background: 'var(--bg-obsidian)', borderRadius: '6px', marginBottom: '1rem', border: '1px solid rgba(255,255,255,0.06)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -1893,6 +2170,29 @@ const ExaminerFlow = () => {
                                       }}>
                                         {snap.rawTrigger === 'heartbeat' ? '5S SNAP' : snap.trigger.slice(0, 14)}
                                       </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          deleteSingleSnapshot(snap);
+                                        }}
+                                        title="Delete this snapshot frame"
+                                        style={{
+                                          position: 'absolute',
+                                          top: '4px',
+                                          right: '4px',
+                                          background: 'rgba(0, 0, 0, 0.75)',
+                                          border: '1px solid rgba(248, 113, 113, 0.4)',
+                                          color: '#f87171',
+                                          borderRadius: '3px',
+                                          padding: '0.15rem 0.35rem',
+                                          fontSize: '0.65rem',
+                                          cursor: 'pointer',
+                                          zIndex: 2
+                                        }}
+                                      >
+                                        🗑️
+                                      </button>
                                     </div>
                                     <div style={{ padding: '0.4rem 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                                       <span>{snap.dateStr}</span>
@@ -2322,6 +2622,92 @@ const ExaminerFlow = () => {
         </div>
       )}
 
+      {/* ===== Purge Candidate Snapshots Confirmation Modal ===== */}
+      {confirmPurgeCandidate && (
+        <div
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 99999,
+            animation: 'fadeIn 0.2s ease',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setConfirmPurgeCandidate(false); }}
+        >
+          <div style={{
+            background: 'var(--bg-surface-solid)',
+            border: '1px solid rgba(248,113,113,0.5)',
+            borderRadius: '12px',
+            padding: '2rem',
+            maxWidth: '460px',
+            width: '90%',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
+            animation: 'slideUp 0.25s ease',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: '56px', height: '56px', borderRadius: '50%',
+                background: 'rgba(248,113,113,0.12)',
+                border: '2px solid #f87171',
+                fontSize: '1.75rem',
+              }}>🧹</div>
+            </div>
+
+            <h3 style={{
+              color: '#f87171',
+              textAlign: 'center',
+              marginBottom: '0.5rem',
+              fontSize: '1.15rem',
+              fontWeight: 700,
+            }}>Purge All Server Snapshots?</h3>
+
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', textAlign: 'center', margin: '0 0 1rem 0' }}>
+              You are about to permanently delete all <strong style={{ color: '#fff' }}>{allSnapshots.length} snapshot frames</strong> for <strong style={{ color: 'var(--accent-gold)' }}>{activeScript?.profiles?.full_name}</strong> from Supabase Storage.
+            </p>
+
+            <div style={{
+              background: 'rgba(234,179,8,0.1)',
+              border: '1px solid rgba(234,179,8,0.3)',
+              borderRadius: '6px',
+              padding: '0.75rem',
+              fontSize: '0.8rem',
+              color: '#fde047',
+              marginBottom: '1.5rem',
+              lineHeight: 1.4
+            }}>
+              💡 <strong>Recommendation:</strong> Click <strong>"📦 Download All as ZIP"</strong> first to save a local backup or upload to your <strong>TeraBox</strong> account. Once purged, files cannot be recovered from the server.
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setConfirmPurgeCandidate(false)}
+                className="btn-premium secondary"
+                style={{ padding: '0.6rem 1.2rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => purgeAllCandidateSnapshots(activeScript.candidate_id, selectedAssessmentId)}
+                className="btn-premium"
+                style={{
+                  background: '#dc2626',
+                  borderColor: '#b91c1c',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  padding: '0.6rem 1.2rem'
+                }}
+              >
+                Yes, Purge {allSnapshots.length} Frames
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FULLSCREEN LIGHTBOX FOR PROCTORING SNAPSHOTS */}
       {lightboxSnapshot && (
         <div style={{
@@ -2369,7 +2755,16 @@ const ExaminerFlow = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => deleteSingleSnapshot(lightboxSnapshot)}
+                  className="btn-premium"
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.4)' }}
+                  title="Permanently delete this frame from cloud storage"
+                >
+                  🗑️ Delete Frame
+                </button>
                 <a
                   href={lightboxSnapshot.signedUrl}
                   target="_blank"

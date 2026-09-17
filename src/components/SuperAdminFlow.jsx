@@ -57,12 +57,28 @@ const SuperAdminFlow = () => {
         .from('proctoring-evidence')
         .createSignedUrl(evidencePath, 600);
       if (signed?.signedUrl) {
-        setEvidencePreview({ url: signed.signedUrl, inf });
+        setEvidencePreview({ url: signed.signedUrl, inf, path: evidencePath });
       } else {
         toast.error('Could not generate link for evidence snapshot.');
       }
     } catch (err) {
       toast.error('Failed to view image: ' + err.message);
+    }
+  };
+
+  const handleDeleteEvidence = async (evidencePath, infId) => {
+    if (!window.confirm('Delete this proctoring evidence frame permanently from cloud storage?')) return;
+    try {
+      const { error } = await supabase.storage.from('proctoring-evidence').remove([evidencePath]);
+      if (error) throw error;
+      if (infId) {
+        await supabase.from('infraction_logs').update({ evidence_path: null }).eq('id', infId);
+        setProctorData(prev => prev.map(p => p.id === infId ? { ...p, evidence_path: null } : p));
+      }
+      setEvidencePreview(null);
+      toast.success('Evidence frame deleted from cloud storage.');
+    } catch (err) {
+      toast.error('Failed to delete: ' + err.message);
     }
   };
 
@@ -509,6 +525,22 @@ const SuperAdminFlow = () => {
             {activeTab === 'proctoring' && (
               <div>
                 <h3 style={{ color: 'var(--text-ivory)', marginBottom: '1rem' }}>Proctoring Logs</h3>
+
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(20,20,30,0.85) 0%, rgba(15,23,42,0.75) 100%)',
+                  border: '1px solid rgba(197,160,89,0.25)',
+                  borderRadius: '6px',
+                  padding: '1rem 1.25rem',
+                  marginBottom: '1.25rem'
+                }}>
+                  <h4 style={{ margin: '0 0 0.25rem 0', color: 'var(--accent-gold)', fontSize: '0.92rem' }}>
+                    🛡️ Proctoring Surveillance Suite &amp; Cloud Storage Archival
+                  </h4>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.5 }}>
+                    Candidates are continuously captured every 5 seconds plus instant infraction frames into Supabase Storage (<code style={{ color: 'var(--accent-gold)' }}>proctoring-evidence</code>).
+                    Examiners can download full ZIP archives for off-server backup into <strong>TeraBox</strong> or <strong>Google Drive</strong>, link the cloud URL, and purge server storage to maintain zero-cost operation.
+                  </p>
+                </div>
                 {proctorLoading ? (
                   <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading logs...</div>
                 ) : proctorData.length === 0 ? (
@@ -750,7 +782,18 @@ const SuperAdminFlow = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {evidencePreview.path && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEvidence(evidencePreview.path, evidencePreview.inf?.id)}
+                    className="btn-premium"
+                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.4)' }}
+                    title="Permanently delete this evidence frame from cloud storage"
+                  >
+                    🗑️ Delete Frame
+                  </button>
+                )}
                 <a
                   href={evidencePreview.url}
                   target="_blank"

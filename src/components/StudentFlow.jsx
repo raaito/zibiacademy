@@ -23,6 +23,42 @@ const decrypt = (encoded, key) => {
   return new TextDecoder().decode(dec);
 };
 
+export const detectIsIOS = () => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const isIOSPlatform = /iPad|iPhone|iPod/.test(navigator.platform) || /iPad|iPhone|iPod/.test(ua);
+  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const isDisplayMediaSupported = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
+  return isIOSPlatform || isIPadOS || (!isDisplayMediaSupported && /Mobile|Tablet/.test(ua));
+};
+
+const wrapCanvasText = (ctx, text, x, y, maxWidth, lineHeight, maxLines = 6) => {
+  if (!text) return;
+  const words = String(text).split(' ');
+  let line = '';
+  let currentY = y;
+  let linesDrawn = 0;
+
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + ' ';
+    const metrics = ctx.measureText(testLine);
+    const testWidth = metrics.width;
+    if (testWidth > maxWidth && n > 0) {
+      ctx.fillText(line, x, currentY);
+      line = words[n] + ' ';
+      currentY += lineHeight;
+      linesDrawn++;
+      if (linesDrawn >= maxLines) {
+        ctx.fillText(line + '...', x, currentY);
+        return;
+      }
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, currentY);
+};
+
 const StudentFlow = () => {
   const { user, profile } = useAuth();
   const [examState, setExamState] = useState('dashboard'); // dashboard, taking_exam, finished
@@ -68,6 +104,27 @@ const StudentFlow = () => {
   const [malpracticeStrikes, setMalpracticeStrikes] = useState(0);
   const [forfeitedReason, setForfeitedReason] = useState('');
   const MAX_MALPRACTICE_STRIKES = 3;
+
+  // iOS Option 4 Proctoring & State Tracking
+  const [isIOSDevice, setIsIOSDevice] = useState(false);
+  const isIOSModeRef = React.useRef(false);
+  const questionsRef = React.useRef([]);
+  const currentQuestionIndexRef = React.useRef(0);
+  const answersRef = React.useRef({});
+  const activeExamRef = React.useRef(null);
+  const timeLeftRef = React.useRef(0);
+
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
+  useEffect(() => { currentQuestionIndexRef.current = currentQuestionIndex; }, [currentQuestionIndex]);
+  useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { activeExamRef.current = activeExam; }, [activeExam]);
+  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
+
+  useEffect(() => {
+    const isIOS = detectIsIOS();
+    setIsIOSDevice(isIOS);
+    isIOSModeRef.current = isIOS;
+  }, []);
 
   let examStartRef = React.useRef(null);
   const examStateRef = React.useRef(examState);
@@ -119,6 +176,7 @@ const StudentFlow = () => {
 
   const handleScreenShareStopped = () => {
     if (examStateRef.current !== 'taking_exam') return;
+    if (isIOSModeRef.current) return;
     setScreenShareLost(true);
     logInfraction(
       'screen_share_stopped',
@@ -129,6 +187,10 @@ const StudentFlow = () => {
   };
 
   const reenableScreenShare = async () => {
+    if (isIOSModeRef.current) {
+      setScreenShareLost(false);
+      return true;
+    }
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: 'always', displaySurface: 'monitor' },
@@ -157,9 +219,69 @@ const StudentFlow = () => {
 
   const requestProctoringStreams = async (examId) => {
     stopProctoringStreams();
+    const isIOS = detectIsIOS();
+    setIsIOSDevice(isIOS);
+    isIOSModeRef.current = isIOS;
+
     let screenGranted = false;
 
-    // 1. Mandatory Screen Capture (Captures candidate screen every 5s)
+    // ===== OPTION 4: iOS ADAPTIVE SURVEILLANCE =====
+    // iOS WebKit does not support navigator.mediaDevices.getDisplayMedia.
+    // Instead of failing or blocking the exam, activate the high-definition
+    // front camera stream (which iOS Safari supports seamlessly) and composite
+    // the virtual exam canvas into every 5-second snapshot & infraction capture.
+    if (isIOS) {
+      try {
+        const camStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: false
+        });
+        webcamStreamRef.current = camStream;
+        if (!webcamVideoElRef.current) {
+          webcamVideoElRef.current = document.createElement('video');
+          webcamVideoElRef.current.playsInline = true;
+          webcamVideoElRef.current.muted = true;
+          webcamVideoElRef.current.setAttribute('playsinline', '');
+          webcamVideoElRef.current.setAttribute('webkit-playsinline', '');
+        }
+        webcamVideoElRef.current.srcObject = camStream;
+        await webcamVideoElRef.current.play();
+
+        if (!canvasElRef.current) {
+          canvasElRef.current = document.createElement('canvas');
+        }
+        canvasElRef.current.width = 1280;
+        canvasElRef.current.height = 720;
+
+        screenGranted = true;
+
+        toast.success(
+          '📱 iOS Device Connected: Live Front Camera & Active Exam Canvas Proctoring Enabled.',
+          { duration: 6000 }
+        );
+
+        if (user && examId) {
+          await supabase.from('infraction_logs').insert({
+            candidate_id: user.id,
+            assessment_id: examId,
+            infraction_type: 'device_mode_ios',
+            details: 'Candidate started exam on Apple iOS device. Option 4 activated: live front camera facial monitoring + real-time exam canvas composite snapshots.',
+            severity: 'info'
+          });
+        }
+      } catch (camErr) {
+        console.error('iOS camera access error:', camErr);
+        toast.error('Camera access is strictly required for proctoring on iPhone / iPad. Please allow camera access in Safari Settings.', { duration: 8000 });
+        return false;
+      }
+      return screenGranted;
+    }
+
+    // 1. Mandatory Screen Capture on Desktop/Android (Captures candidate screen every 5s)
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
@@ -229,6 +351,7 @@ const StudentFlow = () => {
   };
 
   // Captures student screen (with optional face PiP in corner) every 5s & on infractions
+  // On iOS (Option 4): Generates high-fidelity composite of virtual exam canvas + live front camera feed
   const captureSnapshot = async (trigger, force = false) => {
     if ((!screenStreamRef.current && !webcamStreamRef.current) || !canvasElRef.current) return null;
     const now = Date.now();
@@ -238,56 +361,249 @@ const StudentFlow = () => {
     try {
       const canvas = canvasElRef.current;
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#0a0a0c';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      const isIOS = isIOSModeRef.current || !screenVideoElRef.current || screenVideoElRef.current.videoWidth === 0;
 
-      // Primary visual: candidate's active screen
-      if (screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0) {
-        ctx.drawImage(screenVideoElRef.current, 0, 0, canvas.width, canvas.height);
-      } else if (webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0) {
-        ctx.drawImage(webcamVideoElRef.current, 0, 0, canvas.width, canvas.height);
-      }
+      if (isIOS) {
+        // ========================================================
+        // OPTION 4: iOS LIVE EXAM CANVAS & FRONT CAMERA COMPOSITE
+        // ========================================================
+        ctx.fillStyle = '#0a0d14';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Picture-in-Picture: Candidate face webcam in top-right corner
-      if (
-        screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0 &&
-        webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0
-      ) {
-        const pipW = 240;
-        const pipH = 180;
-        const pipX = canvas.width - pipW - 16;
-        const pipY = 16;
+        const curIdx = currentQuestionIndexRef.current || 0;
+        const qList = questionsRef.current || [];
+        const curQ = qList[curIdx] || null;
+        const ansMap = answersRef.current || {};
+        const curAns = curQ ? ansMap[curQ.id] : null;
+        const curExam = activeExamRef.current;
+        const curTime = timeLeftRef.current || 0;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.fillRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
-        ctx.strokeStyle = '#c5a059';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
+        // Left Panel: Virtual Exam Terminal (750 x 650)
+        ctx.fillStyle = '#121622';
+        ctx.fillRect(16, 16, 750, 650);
+        ctx.strokeStyle = 'rgba(197, 160, 89, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(16, 16, 750, 650);
 
-        ctx.drawImage(webcamVideoElRef.current, pipX, pipY, pipW, pipH);
+        // Header bar in left panel
+        ctx.fillStyle = '#181f2e';
+        ctx.fillRect(16, 16, 750, 48);
+        ctx.fillStyle = '#c5a059';
+        ctx.font = 'bold 15px sans-serif';
+        const examTitle = `${curExam?.course_code || 'EXAM'} • ${curExam?.course_name || 'Active Assessment'}`;
+        ctx.fillText(examTitle.slice(0, 52), 32, 46);
 
-        ctx.fillStyle = 'rgba(10, 10, 12, 0.85)';
-        ctx.fillRect(pipX, pipY + pipH - 24, pipW, 24);
-        ctx.fillStyle = '#ffffff';
+        // Timer badge in header
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = 'bold 13px monospace';
+        const m = Math.floor(curTime / 60);
+        const s = curTime % 60;
+        const timeFmt = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        ctx.fillText(`⏱ REMAINING: ${timeFmt}`, 580, 46);
+
+        // Question Tracker Subheader
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.fillRect(32, 78, 718, 38);
+        ctx.fillStyle = '#c5a059';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`QUESTION ${curIdx + 1} OF ${qList.length}`, 44, 102);
+
+        if (curQ?.category) {
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '12px sans-serif';
+          ctx.fillText(`[SECTION: ${curQ.category.toUpperCase()}]`, 240, 102);
+        }
+
+        if (curQ?.points) {
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = '12px sans-serif';
+          ctx.fillText(`(${curQ.points} Pts)`, 680, 102);
+        }
+
+        // Question Text (Cleanly wrapped)
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '16px sans-serif';
+        const qText = curQ?.question_text || 'Active examination session in progress.';
+        wrapCanvasText(ctx, qText, 44, 145, 690, 24, 4);
+
+        // Render Candidate Response / Options
+        if (curQ?.options && Array.isArray(curQ.options) && curQ.options.length > 0) {
+          let optY = 265;
+          curQ.options.slice(0, 5).forEach((opt, oIdx) => {
+            const optLetter = String.fromCharCode(65 + oIdx);
+            const isSelected = String(curAns || '').trim().toLowerCase() === optLetter.toLowerCase() ||
+              String(curAns || '').trim().toLowerCase() === String(opt).trim().toLowerCase();
+
+            ctx.fillStyle = isSelected ? 'rgba(197, 160, 89, 0.22)' : 'rgba(255, 255, 255, 0.03)';
+            ctx.fillRect(44, optY - 20, 690, 38);
+            ctx.strokeStyle = isSelected ? '#c5a059' : 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = isSelected ? 1.5 : 1;
+            ctx.strokeRect(44, optY - 20, 690, 38);
+
+            ctx.fillStyle = isSelected ? '#c5a059' : '#94a3b8';
+            ctx.font = isSelected ? 'bold 14px sans-serif' : '14px sans-serif';
+            const optLabel = `[${isSelected ? '✓ SELECTED' : ' '}]  (${optLetter})  ${String(opt).slice(0, 70)}`;
+            ctx.fillText(optLabel, 58, optY + 4);
+
+            optY += 48;
+          });
+        } else if (curQ?.q_type === 'short_essay' || curQ?.q_type === 'theory') {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+          ctx.fillRect(44, 250, 690, 240);
+          ctx.strokeStyle = 'rgba(197, 160, 89, 0.35)';
+          ctx.strokeRect(44, 250, 690, 240);
+
+          ctx.fillStyle = '#a1a1aa';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText('STUDENT TYPED THEORY / ESSAY RESPONSE:', 56, 275);
+
+          ctx.fillStyle = '#f4f4f5';
+          ctx.font = '13px monospace';
+          const typed = typeof curAns === 'string' && curAns.trim() ? curAns : '(No written response entered yet)';
+          wrapCanvasText(ctx, typed.slice(0, 480), 56, 305, 665, 20, 8);
+        } else {
+          // Standard answer preview
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+          ctx.fillRect(44, 250, 690, 80);
+          ctx.strokeStyle = 'rgba(197, 160, 89, 0.3)';
+          ctx.strokeRect(44, 250, 690, 80);
+          ctx.fillStyle = '#c5a059';
+          ctx.font = '13px sans-serif';
+          ctx.fillText(`Recorded Response: ${String(curAns || '(Unanswered)')}`, 58, 296);
+        }
+
+        // Right Panel: Live Front Camera & Candidate Security Meta (484 x 650)
+        const rightX = 780;
+        const rightW = 484;
+
+        ctx.fillStyle = '#121622';
+        ctx.fillRect(rightX, 16, rightW, 650);
+        ctx.strokeStyle = 'rgba(197, 160, 89, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(rightX, 16, rightW, 650);
+
+        // Header for Camera Panel
+        ctx.fillStyle = '#181f2e';
+        ctx.fillRect(rightX, 16, rightW, 48);
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('🔴 LIVE iOS SURVEILLANCE FEED', rightX + 20, 46);
+
+        ctx.fillStyle = '#38bdf8';
         ctx.font = '11px sans-serif';
-        ctx.fillText(`CAM: ${profile?.full_name?.slice(0, 20) || 'Candidate'}`, pipX + 8, pipY + pipH - 8);
+        ctx.fillText('FACIAL & GAZE MONITOR', rightX + 320, 46);
+
+        // Draw Front Camera Video
+        const camVideo = webcamVideoElRef.current;
+        const vidW = rightW - 32;
+        const vidH = Math.round(vidW * 0.75); // 452 x 339
+        const vidX = rightX + 16;
+        const vidY = 80;
+
+        if (camVideo && camVideo.videoWidth > 0) {
+          ctx.drawImage(camVideo, vidX, vidY, vidW, vidH);
+          ctx.strokeStyle = '#c5a059';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(vidX, vidY, vidW, vidH);
+
+          // Video caption banner
+          ctx.fillStyle = 'rgba(10, 13, 20, 0.85)';
+          ctx.fillRect(vidX, vidY + vidH - 26, vidW, 26);
+          ctx.fillStyle = '#fff';
+          ctx.font = '11px sans-serif';
+          ctx.fillText(`CAMERA: ${profile?.full_name?.slice(0, 26) || 'Candidate'}`, vidX + 10, vidY + vidH - 8);
+        } else {
+          ctx.fillStyle = '#0b0d14';
+          ctx.fillRect(vidX, vidY, vidW, vidH);
+          ctx.strokeStyle = '#334155';
+          ctx.strokeRect(vidX, vidY, vidW, vidH);
+          ctx.fillStyle = '#64748b';
+          ctx.font = '13px sans-serif';
+          ctx.fillText('Front camera feed initializing...', vidX + 120, vidY + 160);
+        }
+
+        // Candidate Biometric Metadata Card below video
+        const metaY = vidY + vidH + 16;
+        const metaH = 650 - (metaY - 16) - 16;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.fillRect(vidX, metaY, vidW, metaH);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.strokeRect(vidX, metaY, vidW, metaH);
+
+        ctx.fillStyle = '#c5a059';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('CANDIDATE BIOMETRIC PROFILE', vidX + 14, metaY + 24);
+
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(`Candidate: ${profile?.full_name || 'Student'}`, vidX + 14, metaY + 48);
+        ctx.fillText(`Matric No: ${profile?.matriculation_number || user?.email || 'N/A'}`, vidX + 14, metaY + 70);
+        ctx.fillText(`Device Mode: Apple iOS • Option 4 (Canvas & Camera)`, vidX + 14, metaY + 92);
+        ctx.fillText(`Active Question: #${curIdx + 1} of ${qList.length}`, vidX + 14, metaY + 114);
+
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('● REAL-TIME SURVEILLANCE & TAB MONITORING ACTIVE', vidX + 14, metaY + 142);
+      } else {
+        // ========================================================
+        // STANDARD DESKTOP / ANDROID SCREEN CAPTURE
+        // ========================================================
+        ctx.fillStyle = '#0a0a0c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Primary visual: candidate's active screen
+        if (screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0) {
+          ctx.drawImage(screenVideoElRef.current, 0, 0, canvas.width, canvas.height);
+        } else if (webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0) {
+          ctx.drawImage(webcamVideoElRef.current, 0, 0, canvas.width, canvas.height);
+        }
+
+        // Picture-in-Picture: Candidate face webcam in top-right corner
+        if (
+          screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0 &&
+          webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0
+        ) {
+          const pipW = 240;
+          const pipH = 180;
+          const pipX = canvas.width - pipW - 16;
+          const pipY = 16;
+
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+          ctx.fillRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
+          ctx.strokeStyle = '#c5a059';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
+
+          ctx.drawImage(webcamVideoElRef.current, pipX, pipY, pipW, pipH);
+
+          ctx.fillStyle = 'rgba(10, 10, 12, 0.85)';
+          ctx.fillRect(pipX, pipY + pipH - 24, pipW, 24);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '11px sans-serif';
+          ctx.fillText(`CAM: ${profile?.full_name?.slice(0, 20) || 'Candidate'}`, pipX + 8, pipY + pipH - 8);
+        }
       }
 
-      // Proctoring audit security footer watermark
-      const barH = 32;
-      ctx.fillStyle = 'rgba(10, 10, 12, 0.88)';
+      // Proctoring audit security footer watermark across bottom of all snapshots
+      const barH = 36;
+      ctx.fillStyle = 'rgba(10, 10, 14, 0.94)';
       ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
+      ctx.strokeStyle = 'rgba(197, 160, 89, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, canvas.height - barH, canvas.width, barH);
+
       ctx.fillStyle = '#c5a059';
       ctx.font = 'bold 12px sans-serif';
-      ctx.fillText('DTMD STRICT SCREEN PROCTOR', 14, canvas.height - 12);
+      ctx.fillText(isIOS ? 'DTMD iOS PROCTOR (OPTION 4)' : 'DTMD STRICT SCREEN PROCTOR', 14, canvas.height - 14);
 
       ctx.fillStyle = '#e2e8f0';
       ctx.font = '12px sans-serif';
       const timeStr = new Date(now).toLocaleString();
       const candStr = `${profile?.full_name || 'Student'} (${profile?.matriculation_number || user?.email || 'N/A'})`;
-      ctx.fillText(` | Candidate: ${candStr} | Event: ${trigger.toUpperCase()} | ${timeStr}`, 220, canvas.height - 12);
+      ctx.fillText(` | Candidate: ${candStr} | Event: ${trigger.toUpperCase()} | ${timeStr}`, isIOS ? 230 : 220, canvas.height - 14);
 
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.65));
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.70));
       if (!blob) return null;
 
       const path = `${user.id}/${activeExam?.id || 'exam'}/${now}-${trigger}.jpg`;
@@ -446,11 +762,13 @@ const StudentFlow = () => {
   };
 
   const captureDeviceInfo = () => {
+    const isIOS = detectIsIOS();
     const ua = navigator.userAgent;
     const platform = navigator.platform || 'unknown';
     const screen = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
     const lang = navigator.language || 'unknown';
-    setDeviceInfo(`UA: ${ua} | Platform: ${platform} | Screen: ${screen} | Lang: ${lang}`);
+    const iosTag = isIOS ? ' | Mode: iOS Option 4 (Canvas & Camera)' : ' | Mode: Desktop/Android Screen Share';
+    setDeviceInfo(`UA: ${ua} | Platform: ${platform} | Screen: ${screen} | Lang: ${lang}${iosTag}`);
 
     fetch('https://api.ipify.org?format=json')
       .then(r => r.json())
@@ -474,13 +792,15 @@ const StudentFlow = () => {
     }
     setActiveExam(exam);
 
-    // Request full-screen display lockdown
-    try {
-      if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
+    // Request full-screen display lockdown (Desktop / Android)
+    if (!isIOSModeRef.current) {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch {
+        // browser may restrict fullscreen without direct user gesture
       }
-    } catch {
-      // browser may restrict fullscreen without direct user gesture
     }
 
     const blended = exam.is_blended || exam.question_type === 'blended';
@@ -698,6 +1018,18 @@ const StudentFlow = () => {
       const durationSec = Math.round((Date.now() - awaySinceRef.current) / 1000);
       awaySinceRef.current = null;
 
+      // Smart iOS/Mobile threshold:
+      // Micro-interruptions (< 6s) like swiping an iOS notification banner or incoming call dismissal
+      // are logged as low-severity notice without malpractice strike.
+      if (isIOSModeRef.current && durationSec < 6) {
+        logInfraction(
+          'mobile_focus_interruption',
+          `Brief mobile focus interruption or notification banner dismissal (${durationSec}s)`,
+          { severity: 'low', durationSeconds: durationSec, captureEvidence: false }
+        );
+        return;
+      }
+
       // Discard micro-absences (< 2s) which happen naturally from clicks or system focus changes
       if (durationSec < MIN_LOGGABLE_SEC) {
         return;
@@ -717,8 +1049,9 @@ const StudentFlow = () => {
         { severity, durationSeconds: durationSec, captureEvidence: true }
       );
 
-      // Malpractice strike ONLY for sustained absence (>= 15s) or repeated genuine tab switching (>= 3 times of >= 4s)
-      if (durationSec >= 15 || (genuineAwayCountRef.current >= 3 && durationSec >= 4)) {
+      // Malpractice strike ONLY for sustained absence (>= 15s) or repeated genuine tab switching (>= 3 times of >= 4s desktop / >= 6s iOS)
+      const minRepeatedAwaySec = isIOSModeRef.current ? 6 : 4;
+      if (durationSec >= 15 || (genuineAwayCountRef.current >= 3 && durationSec >= minRepeatedAwaySec)) {
         recordMalpracticeStrike(`Exited exam window (${durationSec}s absence, violation #${genuineAwayCountRef.current})`);
       }
     };
@@ -822,6 +1155,7 @@ const StudentFlow = () => {
     // Fullscreen enforcement
     const handleFullscreenChange = () => {
       if (examStateRef.current !== 'taking_exam') return;
+      if (isIOSModeRef.current) return; // iOS Safari does not support Fullscreen API on mobile devices
       if (!document.fullscreenElement) {
         setFullscreenLost(true);
         logInfraction(
@@ -1403,10 +1737,12 @@ useEffect(() => {
 
                 <div style={{ background: 'rgba(255, 195, 0, 0.08)', border: '1px solid rgba(255, 195, 0, 0.25)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1.25rem', textAlign: 'left' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold, #ffc300)', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
-                    <span>🖥️</span> Screen Capture Notice
+                    <span>{isIOSDevice ? '📱' : '🖥️'}</span> {isIOSDevice ? 'Apple iOS Proctoring Notice (Option 4)' : 'Screen Capture Notice'}
                   </div>
                   <p style={{ margin: 0, color: 'var(--text-muted, #ccc)', fontSize: '0.82rem', lineHeight: '1.5' }}>
-                    During this assessment, you will be prompted to share your screen for proctoring verification. Please ensure you select your entire screen.
+                    {isIOSDevice
+                      ? 'You are taking this exam on an iPhone/iPad. The system will activate your front camera and composite your exam canvas into proctoring evidence snapshots. Tip: Turn on "Do Not Disturb" (Focus Mode) so notifications do not interrupt your exam window.'
+                      : 'During this assessment, you will be prompted to share your screen for proctoring verification. Please ensure you select your entire screen.'}
                   </p>
                 </div>
 
@@ -1447,8 +1783,8 @@ useEffect(() => {
 
         {examState === 'taking_exam' && activeExam && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-            {/* Screen Share Interrupted Blocking Overlay */}
-            {screenShareLost && (
+            {/* Screen Share Interrupted Blocking Overlay (Only on standard desktop/android mode) */}
+            {screenShareLost && !isIOSDevice && (
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
                 <div style={{ background: '#18181b', border: '2px solid #ef4444', borderRadius: '12px', padding: '2rem', maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(239,68,68,0.3)' }}>
                   <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
@@ -1467,8 +1803,8 @@ useEffect(() => {
               </div>
             )}
 
-            {/* Fullscreen Mode Exited Recovery Overlay */}
-            {fullscreenLost && (
+            {/* Fullscreen Mode Exited Recovery Overlay (Only on desktop/android) */}
+            {fullscreenLost && !isIOSDevice && (
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(6px)' }}>
                 <div style={{ background: '#18181b', border: '1px solid var(--accent-gold, #ffc300)', borderRadius: '12px', padding: '2rem', maxWidth: '460px', width: '100%', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.7)' }}>
                   <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>⛶</div>
@@ -1549,9 +1885,9 @@ useEffect(() => {
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  <span>Proctoring Engine: <span style={{ color: '#4ade80', fontWeight: '600' }}>Active &amp; Recording Screen (5s Snapshots)</span></span>
+                  <span>Proctoring Engine: <span style={{ color: '#4ade80', fontWeight: '600' }}>{isIOSDevice ? 'Active (iOS Option 4: Front Cam & Exam Canvas Composite)' : 'Active & Recording Screen (5s Snapshots)'}</span></span>
                   <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-                  <span style={{ color: '#38bdf8' }}>Face Verification: In-Frame</span>
+                  <span style={{ color: '#38bdf8' }}>{isIOSDevice ? 'Front Camera Surveillance: Live' : 'Face Verification: In-Frame'}</span>
                 </div>
                 {activeExam.instructions && (
                   <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(197,160,89,0.08)', border: '1px solid var(--border-focus)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
@@ -1937,6 +2273,32 @@ useEffect(() => {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Floating iOS Proctor Surveillance Pill */}
+            {isIOSDevice && (
+              <div style={{
+                position: 'fixed',
+                bottom: '16px',
+                left: '16px',
+                zIndex: 900,
+                background: 'rgba(10, 13, 20, 0.92)',
+                border: '1px solid rgba(197, 160, 89, 0.6)',
+                borderRadius: '24px',
+                padding: '0.4rem 0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(8px)',
+                fontSize: '0.78rem',
+                color: '#e2e8f0',
+                pointerEvents: 'none'
+              }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 8px #22c55e' }} />
+                <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>iOS Option 4:</span>
+                <span>Front Cam &amp; Canvas Active</span>
               </div>
             )}
           </div>
