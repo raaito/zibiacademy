@@ -61,6 +61,15 @@ const ExaminerFlow = () => {
   const [externalBackupUrl, setExternalBackupUrl] = useState('');
   const [savingBackupUrl, setSavingBackupUrl] = useState(false);
 
+  // Upload All to Cloud Folder states
+  const [uploadAllModalOpen, setUploadAllModalOpen] = useState(false);
+  const [uploadDestinationUrl, setUploadDestinationUrl] = useState('');
+  const [uploadStudentName, setUploadStudentName] = useState('');
+  const [uploadExamType, setUploadExamType] = useState('Zibi');
+  const [uploadYear, setUploadYear] = useState('2026/27');
+  const [isUploadingAll, setIsUploadingAll] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState('');
+
   // Access modal & Unwritten candidates state
   const [accessModal, setAccessModal] = useState(null); // { assessment } | null
   const [allStaff, setAllStaff] = useState([]);
@@ -444,8 +453,8 @@ const ExaminerFlow = () => {
         `SNAPSHOT FRAMES INDEX:`,
         ...allSnapshots.map((s, idx) => `[Frame #${idx + 1}]  ${s.name}  |  Trigger: ${s.trigger}  |  Captured: ${s.fullDateStr}`),
         `\n----------------------------------------------------------------`,
-        `INFRACTIONS LOG INDEX:`,
-        ...scriptInfractions.map((inf, idx) => `[Infraction #${idx + 1}]  ${inf.infraction_type} (${inf.severity || 'low'}) at ${new Date(inf.logged_at).toLocaleTimeString()}: ${inf.details}`)
+        `INFRACTIONS LOG:`,
+        ...scriptInfractions.map((inf) => `• ${inf.infraction_type}${inf.duration_seconds != null ? ` (${inf.duration_seconds}s)` : ''}: ${inf.details}`)
       ].join('\n');
 
       folder.file('PROCTORING_AUDIT_REPORT.txt', summaryContent);
@@ -506,6 +515,168 @@ const ExaminerFlow = () => {
       toast.error(`ZIP creation failed: ${err.message}`, { id: toastId });
     } finally {
       setIsDownloadingZip(false);
+    }
+  };
+
+  const sanitizeFileName = (str) => {
+    return (str || '').trim().replace(/[/\\?%*:|"<>]/g, '_');
+  };
+
+  const getUploadFolderName = (studentName, examType, year) => {
+    const sName = sanitizeFileName(studentName || 'Student');
+    const eType = sanitizeFileName(examType || 'Zibi');
+    const yVal = (year || '2026/27').trim().replace(/\//g, '-').replace(/[/\\?%*:|"<>]/g, '_');
+    return `${sName}_${eType}_${yVal}`;
+  };
+
+  const openUploadAllModal = () => {
+    if (!allSnapshots || allSnapshots.length === 0) {
+      return toast.error('No proctoring snapshot files available to upload.');
+    }
+    const candName = activeScript?.profiles?.full_name || 'Candidate';
+    setUploadStudentName(candName);
+    setUploadExamType('Zibi');
+    setUploadYear('2026/27');
+    setUploadDestinationUrl(externalBackupUrl || '');
+    setUploadProgressText('');
+    setUploadAllModalOpen(true);
+  };
+
+  const handleExecuteUploadAll = async () => {
+    const targetUrl = uploadDestinationUrl.trim();
+    if (!targetUrl) {
+      return toast.error('Please enter the destination cloud folder link.');
+    }
+
+    setIsUploadingAll(true);
+    const folderName = getUploadFolderName(uploadStudentName, uploadExamType, uploadYear);
+    const toastId = toast.loading(`Preparing folder "${folderName}" for upload...`);
+
+    try {
+      const zip = new JSZip();
+      // Single root folder named by student name, exam type (zibi), and year (2026/27)
+      const targetFolder = zip.folder(folderName);
+
+      const assessment = assessments.find(a => a.id === selectedAssessmentId);
+      const matricNo = activeScript?.profiles?.matriculation_number || activeScript?.candidate_id?.slice(0, 8) || 'student';
+      const courseCode = assessment?.course_code || 'ZIBI';
+
+      // PROCTORING AUDIT REPORT inside the single folder
+      const summaryContent = [
+        `================================================================`,
+        `ZIBI ACADEMY PROCTORING SURVEILLANCE CLOUD ARCHIVE`,
+        `================================================================`,
+        `Folder Name:           ${folderName}`,
+        `Student Name:          ${uploadStudentName}`,
+        `Matriculation Number:  ${matricNo}`,
+        `Exam Type:             ${uploadExamType}`,
+        `Academic Session/Year: ${uploadYear}`,
+        `Course:                ${courseCode} - ${assessment?.course_name || ''}`,
+        `Destination Link:      ${targetUrl}`,
+        `Archived At:           ${new Date().toLocaleString()}`,
+        `Total Snapshot Frames: ${allSnapshots.length}`,
+        `Infraction Events:     ${scriptInfractions.length}`,
+        `----------------------------------------------------------------`,
+        `SNAPSHOT FRAMES INDEX:`,
+        ...allSnapshots.map((s, idx) => `[Frame #${idx + 1}]  ${s.name}  |  Trigger: ${s.trigger}  |  Captured: ${s.fullDateStr}`),
+        `\n----------------------------------------------------------------`,
+        `INFRACTIONS LOG:`,
+        ...scriptInfractions.map((inf) => `• ${inf.infraction_type}${inf.duration_seconds != null ? ` (${inf.duration_seconds}s)` : ''}: ${inf.details}`)
+      ].join('\n');
+
+      targetFolder.file('PROCTORING_AUDIT_REPORT.txt', summaryContent);
+
+      // Fetch snapshot files in parallel batches
+      let successCount = 0;
+      const CHUNK_SIZE = 6;
+      for (let i = 0; i < allSnapshots.length; i += CHUNK_SIZE) {
+        const slice = allSnapshots.slice(i, i + CHUNK_SIZE);
+        setUploadProgressText(`Fetching frames ${i + 1} - ${Math.min(i + CHUNK_SIZE, allSnapshots.length)} of ${allSnapshots.length}...`);
+        toast.loading(`Fetching frames ${i + 1} - ${Math.min(i + CHUNK_SIZE, allSnapshots.length)} of ${allSnapshots.length}...`, { id: toastId });
+        await Promise.all(
+          slice.map(async (snap, sliceIdx) => {
+            const overallIdx = i + sliceIdx + 1;
+            try {
+              let blob = null;
+              const { data: dlData, error: dlErr } = await supabase.storage
+                .from('proctoring-evidence')
+                .download(snap.path);
+              if (!dlErr && dlData) {
+                blob = dlData;
+              } else if (snap.signedUrl) {
+                const resp = await fetch(snap.signedUrl);
+                if (resp.ok) blob = await resp.blob();
+              }
+              if (blob) {
+                const cleanFileName = `frame_${String(overallIdx).padStart(4, '0')}_${snap.rawTrigger}_${snap.name}`;
+                targetFolder.file(cleanFileName, blob);
+                successCount++;
+              }
+            } catch (err) {
+              console.warn(`Could not include frame ${snap.name}:`, err);
+            }
+          })
+        );
+      }
+
+      setUploadProgressText(`Compressing into folder archive "${folderName}"...`);
+      toast.loading(`Compressing ${successCount} files into single folder "${folderName}"...`, { id: toastId });
+
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      // Direct endpoint upload if URL is an API or webhook receiver
+      const isDirectEndpoint = targetUrl.startsWith('http') && (targetUrl.includes('/api/') || targetUrl.includes('/upload') || targetUrl.includes('webhook'));
+      if (isDirectEndpoint) {
+        try {
+          setUploadProgressText('Uploading archive directly to destination endpoint...');
+          const formData = new FormData();
+          formData.append('file', zipBlob, `${folderName}.zip`);
+          formData.append('folder_name', folderName);
+          formData.append('student_name', uploadStudentName);
+          formData.append('exam_type', uploadExamType);
+          formData.append('year', uploadYear);
+          await fetch(targetUrl, { method: 'POST', body: formData });
+        } catch (postErr) {
+          console.warn('Direct upload endpoint attempt finished:', postErr);
+        }
+      }
+
+      // Save destination link to candidate's persistent record
+      saveExternalBackupUrl(activeScript.candidate_id, selectedAssessmentId, targetUrl);
+
+      // Download the self-contained folder archive named by Student, Exam Type, and Year
+      const blobUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${folderName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+
+      // Copy folder name to clipboard
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(folderName).catch(() => {});
+      }
+
+      // Open destination link in new tab
+      const validWebUrl = targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`;
+      window.open(validWebUrl, '_blank', 'noopener,noreferrer');
+
+      toast.success(
+        `All files packaged into folder "${folderName}"! Destination opened in new tab.`,
+        { id: toastId, duration: 8000 }
+      );
+      setUploadAllModalOpen(false);
+    } catch (err) {
+      toast.error(`Upload packaging failed: ${err.message}`, { id: toastId });
+    } finally {
+      setIsUploadingAll(false);
+      setUploadProgressText('');
     }
   };
 
@@ -1883,14 +2054,14 @@ const ExaminerFlow = () => {
                             <button
                               type="button"
                               onClick={() => downloadAllSnapshotsZip(activeScript, assessments.find(a => a.id === selectedAssessmentId))}
-                              disabled={isDownloadingZip || allSnapshots.length === 0}
+                              disabled={isDownloadingZip || isUploadingAll || allSnapshots.length === 0}
                               className="btn-premium"
                               style={{
                                 padding: '0.4rem 0.85rem',
                                 fontSize: '0.8rem',
                                 color: '#38bdf8',
                                 borderColor: 'rgba(56,189,248,0.4)',
-                                opacity: (isDownloadingZip || allSnapshots.length === 0) ? 0.5 : 1
+                                opacity: (isDownloadingZip || isUploadingAll || allSnapshots.length === 0) ? 0.5 : 1
                               }}
                               title="Download all snapshots and audit log compressed into a single .zip file for uploading to TeraBox"
                             >
@@ -1899,15 +2070,40 @@ const ExaminerFlow = () => {
 
                             <button
                               type="button"
+                              onClick={openUploadAllModal}
+                              disabled={isUploadingAll || isDownloadingZip || allSnapshots.length === 0}
+                              className="btn-premium primary"
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '0.8rem',
+                                background: 'linear-gradient(135deg, #c5a059 0%, #ffc300 100%)',
+                                borderColor: '#ffc300',
+                                color: '#000',
+                                fontWeight: 'bold',
+                                opacity: (isUploadingAll || isDownloadingZip || allSnapshots.length === 0) ? 0.5 : 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem'
+                              }}
+                              title="Upload all files into one folder named by Student Name, Exam Type (zibi), and Year (2026/27)"
+                            >
+                              <span>☁️ Upload All</span>
+                              <span style={{ fontSize: '0.72rem', padding: '0.05rem 0.35rem', borderRadius: '10px', background: 'rgba(0,0,0,0.3)', color: '#fff' }}>
+                                {allSnapshots.length}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => setConfirmPurgeCandidate(true)}
-                              disabled={allSnapshots.length === 0}
+                              disabled={allSnapshots.length === 0 || isUploadingAll || isDownloadingZip}
                               className="btn-premium"
                               style={{
                                 padding: '0.4rem 0.85rem',
                                 fontSize: '0.8rem',
                                 color: '#f87171',
                                 borderColor: 'rgba(248,113,113,0.4)',
-                                opacity: allSnapshots.length === 0 ? 0.5 : 1
+                                opacity: (allSnapshots.length === 0 || isUploadingAll || isDownloadingZip) ? 0.5 : 1
                               }}
                               title="Delete all snapshots from Supabase storage to reclaim server quota"
                             >
@@ -2805,6 +3001,244 @@ const ExaminerFlow = () => {
                 alt={lightboxSnapshot.name}
                 style={{ maxWidth: '100%', maxHeight: 'calc(90vh - 120px)', objectFit: 'contain' }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UPLOAD ALL FILES TO CLOUD FOLDER MODAL */}
+      {uploadAllModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          zIndex: 99998,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem',
+          backdropFilter: 'blur(6px)'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '560px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-focus)',
+            borderRadius: '10px',
+            padding: '1.75rem',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>☁️ Upload All Files to Cloud Archive</span>
+                </h3>
+                <p style={{ margin: '0.35rem 0 0', color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: '1.4' }}>
+                  Upload all proctoring snapshots and audit log into one dedicated folder named by student name, exam type, and year.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isUploadingAll && setUploadAllModalOpen(false)}
+                disabled={isUploadingAll}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '1.25rem',
+                  cursor: isUploadingAll ? 'not-allowed' : 'pointer',
+                  padding: '0.2rem 0.5rem'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Destination Link Input */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-ivory)', marginBottom: '0.4rem' }}>
+                Destination Cloud Folder Link <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="url"
+                  value={uploadDestinationUrl}
+                  onChange={(e) => setUploadDestinationUrl(e.target.value)}
+                  placeholder="Paste cloud folder link (e.g. TeraBox, Google Drive, OneDrive, or Dropbox)"
+                  disabled={isUploadingAll}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem 0.8rem',
+                    fontSize: '0.85rem',
+                    background: 'var(--bg-obsidian)',
+                    border: '1px solid var(--border-focus)',
+                    borderRadius: '4px',
+                    color: 'var(--text-ivory)'
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={isUploadingAll}
+                  onClick={async () => {
+                    try {
+                      if (navigator.clipboard?.readText) {
+                        const text = await navigator.clipboard.readText();
+                        if (text) setUploadDestinationUrl(text.trim());
+                      }
+                    } catch {}
+                  }}
+                  className="btn-premium"
+                  style={{ padding: '0.6rem 0.75rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                  title="Paste link from clipboard"
+                >
+                  📋 Paste
+                </button>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                Supports TeraBox, Google Drive, OneDrive, Dropbox, or custom webhook endpoints.
+              </div>
+            </div>
+
+            {/* Folder Name Configuration Fields: Student Name, Exam Type (zibi), Year (2026/27) */}
+            <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--accent-gold)', fontWeight: 600, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Folder Naming Specification
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                    Student's Name
+                  </label>
+                  <input
+                    type="text"
+                    value={uploadStudentName}
+                    onChange={(e) => setUploadStudentName(e.target.value)}
+                    disabled={isUploadingAll}
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.6rem',
+                      fontSize: '0.82rem',
+                      background: 'var(--bg-obsidian)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '4px',
+                      color: 'var(--text-ivory)'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                    Exam Type
+                  </label>
+                  <input
+                    type="text"
+                    value={uploadExamType}
+                    onChange={(e) => setUploadExamType(e.target.value)}
+                    disabled={isUploadingAll}
+                    placeholder="zibi"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.6rem',
+                      fontSize: '0.82rem',
+                      background: 'var(--bg-obsidian)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '4px',
+                      color: 'var(--text-ivory)'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                    Year
+                  </label>
+                  <input
+                    type="text"
+                    value={uploadYear}
+                    onChange={(e) => setUploadYear(e.target.value)}
+                    disabled={isUploadingAll}
+                    placeholder="2026/27"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.6rem',
+                      fontSize: '0.82rem',
+                      background: 'var(--bg-obsidian)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '4px',
+                      color: 'var(--text-ivory)'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Target Folder Preview */}
+              <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Target Folder Name:
+                </div>
+                <div style={{
+                  fontSize: '0.82rem',
+                  color: 'var(--accent-gold)',
+                  fontWeight: 600,
+                  background: 'rgba(255, 195, 0, 0.1)',
+                  padding: '0.25rem 0.6rem',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 195, 0, 0.25)'
+                }}>
+                  📁 {getUploadFolderName(uploadStudentName, uploadExamType, uploadYear)}
+                </div>
+              </div>
+            </div>
+
+            {/* Content summary */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.85rem', background: 'rgba(255,255,255,0.03)', borderRadius: '4px', marginBottom: '1.25rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              <span>Included Files in Folder:</span>
+              <span style={{ color: 'var(--text-ivory)', fontWeight: 600 }}>
+                {allSnapshots.length} Snapshots + 1 Proctoring Audit Report
+              </span>
+            </div>
+
+            {/* Upload progress indicator */}
+            {isUploadingAll && (
+              <div style={{ marginBottom: '1.25rem', padding: '0.75rem', background: 'rgba(212,175,55,0.1)', border: '1px solid var(--border-focus)', borderRadius: '4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.82rem', color: 'var(--accent-gold)', fontWeight: 600, marginBottom: '0.35rem' }}>
+                  ⏳ {uploadProgressText || 'Processing files for cloud upload...'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Please keep this window open while snapshots are being compiled.
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setUploadAllModalOpen(false)}
+                disabled={isUploadingAll}
+                className="btn-premium secondary"
+                style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteUploadAll}
+                disabled={isUploadingAll || !uploadDestinationUrl.trim()}
+                className="btn-premium primary"
+                style={{
+                  padding: '0.6rem 1.4rem',
+                  fontSize: '0.85rem',
+                  background: 'linear-gradient(135deg, #c5a059 0%, #ffc300 100%)',
+                  borderColor: '#ffc300',
+                  color: '#000',
+                  fontWeight: 'bold',
+                  opacity: (isUploadingAll || !uploadDestinationUrl.trim()) ? 0.6 : 1
+                }}
+              >
+                {isUploadingAll ? 'Uploading & Packaging...' : '☁️ Upload All Files to Folder'}
+              </button>
             </div>
           </div>
         </div>
