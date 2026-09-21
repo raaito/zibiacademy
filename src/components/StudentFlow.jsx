@@ -177,9 +177,13 @@ const StudentFlow = () => {
 
   // Away-tracking & violation counters
   const awaySinceRef = React.useRef(null);
-  const awaySignalsRef = React.useRef(new Set());
+  const awayReasonRef = React.useRef(null);
   const awayCountRef = React.useRef(0);
   const genuineAwayCountRef = React.useRef(0);
+  const latestRecordMalpracticeStrikeRef = React.useRef(null);
+  const latestCaptureSnapshotRef = React.useRef(null);
+  const categoryTimeLeftRef = React.useRef(0);
+  const isBlendedRef = React.useRef(false);
 
   const exitFullscreenSafely = () => {
     try {
@@ -263,97 +267,11 @@ const StudentFlow = () => {
 
     let screenGranted = false;
 
-    // ===== OPTION 4: iOS ADAPTIVE SURVEILLANCE =====
-    // iOS WebKit does not support navigator.mediaDevices.getDisplayMedia.
-    // Instead of failing or blocking the exam, activate the high-definition
-    // front camera stream (which iOS Safari supports seamlessly) and composite
-    // the virtual exam canvas into every 5-second snapshot & infraction capture.
-    if (isIOS) {
-      try {
-        const camStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          },
-          audio: false
-        });
-        webcamStreamRef.current = camStream;
-        if (!webcamVideoElRef.current) {
-          webcamVideoElRef.current = document.createElement('video');
-          webcamVideoElRef.current.playsInline = true;
-          webcamVideoElRef.current.muted = true;
-          webcamVideoElRef.current.setAttribute('playsinline', '');
-          webcamVideoElRef.current.setAttribute('webkit-playsinline', '');
-        }
-        webcamVideoElRef.current.srcObject = camStream;
-        await webcamVideoElRef.current.play();
-
-        if (!canvasElRef.current) {
-          canvasElRef.current = document.createElement('canvas');
-        }
-        canvasElRef.current.width = 1280;
-        canvasElRef.current.height = 720;
-
-        screenGranted = true;
-
-        toast.success(
-          '📱 iOS Device Connected: Live Front Camera & Active Exam Canvas Proctoring Enabled.',
-          { duration: 6000 }
-        );
-
-        if (user && examId) {
-          await supabase.from('infraction_logs').insert({
-            candidate_id: user.id,
-            assessment_id: examId,
-            infraction_type: 'device_mode_ios',
-            details: 'Candidate started exam on Apple iOS device. Option 4 activated: live front camera facial monitoring + real-time exam canvas composite snapshots.',
-            severity: 'info'
-          });
-        }
-      } catch (camErr) {
-        console.error('iOS camera access error:', camErr);
-        toast.error('Camera access is strictly required for proctoring on iPhone / iPad. Please allow camera access in Safari Settings.', { duration: 8000 });
-        return false;
-      }
-      return screenGranted;
-    }
-
-    // 1. Mandatory Screen Capture on Desktop/Android (Try capturing candidate screen if supported)
-    if (typeof navigator?.mediaDevices?.getDisplayMedia === 'function') {
-      try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: false
-        });
-        screenStreamRef.current = screenStream;
-
-        if (!screenVideoElRef.current) {
-          screenVideoElRef.current = document.createElement('video');
-          screenVideoElRef.current.playsInline = true;
-          screenVideoElRef.current.muted = true;
-        }
-        screenVideoElRef.current.srcObject = screenStream;
-        await screenVideoElRef.current.play();
-
-        const screenTrack = screenStream.getVideoTracks()[0];
-        if (screenTrack) {
-          screenTrack.onended = () => {
-            handleScreenShareStopped();
-          };
-        }
-        screenGranted = true;
-      } catch (err) {
-        console.warn('Screen capture via getDisplayMedia was cancelled or not supported on this device:', err);
-      }
-    }
-
-    // 2. Mobile Device Adaptive Proctoring:
-    // Mobile browsers (Android Chrome, mobile WebViews, etc.) either lack OS-level screen capture
-    // or disallow getDisplayMedia without specialized enterprise MDM profiles.
-    // Instead of displaying a blocking error, smoothly activate the front camera proctoring
-    // and live exam monitoring so the student can commence their exam seamlessly.
-    if (!screenGranted && (isMobile || typeof navigator?.mediaDevices?.getDisplayMedia !== 'function')) {
+    // ===== 1. MOBILE DEVICE ADAPTIVE PROCTORING (Apple iOS & Android Mobile) =====
+    // Mobile browsers (iOS Safari, Android Chrome, mobile WebViews) lack multi-stream screen+camera capabilities.
+    // Instead of failing or requesting unsupported desktop screen shares, smoothly activate the high-definition
+    // front camera proctoring and real-time exam composite engine for comprehensive monitoring.
+    if (isIOS || isMobile) {
       try {
         const camStream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -384,8 +302,9 @@ const StudentFlow = () => {
         isMobileProctorModeRef.current = true;
         setIsMobileProctor(true);
 
+        const modeLabel = isIOS ? 'Apple iOS' : 'Mobile Device';
         toast.success(
-          '📱 Mobile Device Connected: Live Front Camera & Active Exam Monitoring Enabled.',
+          `📱 ${modeLabel} Connected: Live Front Camera & Real-Time Exam Monitoring Enabled.`,
           { duration: 6000 }
         );
 
@@ -393,16 +312,46 @@ const StudentFlow = () => {
           await supabase.from('infraction_logs').insert({
             candidate_id: user.id,
             assessment_id: examId,
-            infraction_type: 'device_mode_mobile',
-            details: 'Candidate started exam on mobile/Android device. Live front camera proctoring & active exam monitoring activated.',
+            infraction_type: isIOS ? 'device_mode_ios' : 'device_mode_mobile',
+            details: `Candidate started exam on ${modeLabel}. Front camera facial monitoring + real-time exam canvas composite snapshots activated.`,
             severity: 'info'
           });
         }
         return true;
       } catch (camErr) {
         console.error('Mobile camera access error:', camErr);
-        toast.error('Camera access is required for proctoring on mobile devices. Please allow camera access in your browser settings.', { duration: 8000 });
+        toast.error('Camera access is strictly required for proctoring on mobile devices. Please allow camera permissions in your browser settings.', { duration: 8000 });
         return false;
+      }
+    }
+
+    // ===== 2. MANDATORY DESKTOP SCREEN CAPTURE & WEBCAM PIP =====
+    // On desktop PCs / laptops, full screen capture is strictly mandatory.
+    if (typeof navigator?.mediaDevices?.getDisplayMedia === 'function') {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false
+        });
+        screenStreamRef.current = screenStream;
+
+        if (!screenVideoElRef.current) {
+          screenVideoElRef.current = document.createElement('video');
+          screenVideoElRef.current.playsInline = true;
+          screenVideoElRef.current.muted = true;
+        }
+        screenVideoElRef.current.srcObject = screenStream;
+        await screenVideoElRef.current.play();
+
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (screenTrack) {
+          screenTrack.onended = () => {
+            handleScreenShareStopped();
+          };
+        }
+        screenGranted = true;
+      } catch (err) {
+        console.warn('Screen capture via getDisplayMedia was cancelled or not supported on this device:', err);
       }
     }
 
@@ -464,7 +413,7 @@ const StudentFlow = () => {
       
       const isIOS = isIOSModeRef.current === true;
       const isMobileProctor = isMobileProctorModeRef.current === true;
-      const useComposite = isIOS || (isMobileProctor && (!screenVideoElRef.current || screenVideoElRef.current.videoWidth === 0));
+      const useComposite = isIOS || isMobileProctor || (!screenVideoElRef.current || screenVideoElRef.current.videoWidth === 0);
 
       if (useComposite) {
         // ========================================================
@@ -591,7 +540,7 @@ const StudentFlow = () => {
         ctx.fillRect(rightX, 16, rightW, 48);
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 13px sans-serif';
-        ctx.fillText('🔴 LIVE iOS SURVEILLANCE FEED', rightX + 20, 46);
+        ctx.fillText(isIOS ? '🔴 LIVE iOS SURVEILLANCE FEED' : '🔴 LIVE MOBILE SURVEILLANCE FEED', rightX + 20, 46);
 
         ctx.fillStyle = '#38bdf8';
         ctx.font = '11px sans-serif';
@@ -1037,9 +986,10 @@ const StudentFlow = () => {
     if (!activeExam || !user) return;
     const { severity = 'low', durationSeconds = null, captureEvidence = false } = opts;
 
-    const qNum = currentQuestionIndex + 1;
-    const totalQs = questions.length;
-    const timeRemaining = formatTime(isBlended ? categoryTimeLeft : timeLeft);
+    const qNum = (currentQuestionIndexRef.current || 0) + 1;
+    const totalQs = (questionsRef.current?.length) || (questions?.length) || 1;
+    const curTime = isBlendedRef.current ? categoryTimeLeftRef.current : timeLeftRef.current;
+    const timeRemaining = formatTime(curTime !== undefined ? curTime : (isBlended ? categoryTimeLeft : timeLeft));
     const enriched = `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
 
     // Only bother capturing a frame for events actually worth an examiner's
@@ -1099,85 +1049,88 @@ const StudentFlow = () => {
   useEffect(() => {
     if (examState !== 'taking_exam') return;
 
-    const MIN_LOGGABLE_SEC = 2;
-    const MEDIUM_THRESHOLD_SEC = 8;
-    const HIGH_THRESHOLD_SEC = 20;
-
-    const severityForDuration = (sec) => {
-      if (sec >= HIGH_THRESHOLD_SEC) return 'high';
-      if (sec >= MEDIUM_THRESHOLD_SEC) return 'medium';
-      if (sec >= MIN_LOGGABLE_SEC) return 'low';
-      return 'info';
-    };
-
-    const isCurrentlyAway = () => document.hidden || !document.hasFocus();
-
-    const openAwayWindow = (signal) => {
-      awaySignalsRef.current.add(signal);
+    // Single source of truth for away-from-exam tracking - eliminates race conditions & Set deadlocks
+    const recordAwayStart = (reason) => {
       if (awaySinceRef.current === null) {
         awaySinceRef.current = Date.now();
-        // Immediately capture evidence frame of the screen upon leaving
-        captureSnapshot('navigated_away', true);
+        awayReasonRef.current = reason;
+        // Immediately take evidence snapshot upon departure
+        latestCaptureSnapshotRef.current?.('navigated_away', true);
       }
     };
 
-    const closeAwayWindowIfDone = (signal) => {
-      awaySignalsRef.current.delete(signal);
-      if (awaySignalsRef.current.size > 0 || awaySinceRef.current === null) return;
-
-      const durationSec = Math.round((Date.now() - awaySinceRef.current) / 1000);
+    const recordAwayReturn = () => {
+      if (awaySinceRef.current === null) return;
+      const departureTime = awaySinceRef.current;
+      const departureReason = awayReasonRef.current || 'tab_switch';
       awaySinceRef.current = null;
+      awayReasonRef.current = null;
 
-      // Smart iOS/Mobile threshold:
-      // Micro-interruptions (< 6s) like swiping an iOS/Android notification banner or incoming call dismissal
-      // are logged as low-severity notice without malpractice strike.
-      if ((isIOSModeRef.current || isMobileProctorModeRef.current) && durationSec < 6) {
-        logInfraction(
-          'mobile_focus_interruption',
-          'Brief mobile focus interruption or notification banner dismissal',
-          { severity: 'low', durationSeconds: durationSec, captureEvidence: false }
+      const durationSec = Math.max(1, Math.round((Date.now() - departureTime) / 1000));
+
+      if (departureReason === 'tab_switch_hidden' || departureReason === 'pagehide') {
+        genuineAwayCountRef.current = (genuineAwayCountRef.current || 0) + 1;
+        const severity = durationSec >= 10 ? 'high' : (durationSec >= 4 ? 'high' : 'medium');
+        const desc = `Switched away to another browser tab or minimized window (${durationSec}s away to search or browse external resources)`;
+
+        latestLogInfractionRef.current?.(
+          'tab_or_window_switch',
+          desc,
+          { severity, durationSeconds: durationSec, captureEvidence: true }
         );
-        return;
-      }
 
-      // Discard micro-absences (< 2s) which happen naturally from clicks or system focus changes
-      if (durationSec < MIN_LOGGABLE_SEC) {
-        return;
-      }
+        latestRecordMalpracticeStrikeRef.current?.(
+          `Switched to another browser tab or external application (${durationSec}s away)`
+        );
 
-      genuineAwayCountRef.current = (genuineAwayCountRef.current || 0) + 1;
-      const severity = severityForDuration(durationSec);
+        toast.error(
+          `🚨 PROHIBITED TAB SWITCH DETECTED: You navigated away from the exam for ${durationSec}s. Tab switching to search for answers is strictly prohibited and recorded as malpractice!`,
+          { duration: 7000, style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' } }
+        );
+      } else if (departureReason === 'window_blur') {
+        if (durationSec < 2) return; // ignore micro focus change under 2s
 
-      const isHidden = signal === 'hidden' || document.hidden;
-      const desc = isHidden
-        ? 'Switched away to another browser tab or minimized window'
-        : 'Lost focus to an external application or secondary screen';
+        const severity = durationSec >= 8 ? 'high' : 'medium';
+        const desc = `Exam window lost focus to external application or overlay (${durationSec}s duration)`;
 
-      logInfraction(
-        'tab_or_window_switch',
-        desc,
-        { severity, durationSeconds: durationSec, captureEvidence: true }
-      );
+        latestLogInfractionRef.current?.(
+          'window_blur',
+          desc,
+          { severity, durationSeconds: durationSec, captureEvidence: true }
+        );
 
-      // Malpractice strike ONLY for sustained absence (>= 15s) or repeated genuine tab switching (>= 3 times of >= 4s desktop / >= 6s mobile)
-      const minRepeatedAwaySec = (isIOSModeRef.current || isMobileProctorModeRef.current) ? 6 : 4;
-      if (durationSec >= 15 || (genuineAwayCountRef.current >= 3 && durationSec >= minRepeatedAwaySec)) {
-        recordMalpracticeStrike('Exited exam window or switched away from the active examination');
+        if (durationSec >= 6) {
+          latestRecordMalpracticeStrikeRef.current?.(
+            `Lost window focus to external application (${durationSec}s)`
+          );
+        }
       }
     };
 
     const handleVisibility = () => {
-      if (document.hidden) openAwayWindow('hidden');
-      else closeAwayWindowIfDone('hidden');
+      if (document.hidden) {
+        recordAwayStart('tab_switch_hidden');
+      } else {
+        recordAwayReturn();
+      }
+    };
+
+    const handlePageHide = () => {
+      recordAwayStart('pagehide');
+    };
+
+    const handlePageShow = () => {
+      recordAwayReturn();
     };
 
     const handleBlur = () => {
-      if (!isCurrentlyAway()) return;
-      openAwayWindow('blur');
+      if (!document.hidden) {
+        recordAwayStart('window_blur');
+      }
     };
 
     const handleFocus = () => {
-      closeAwayWindowIfDone('blur');
+      recordAwayReturn();
     };
 
     const preventCopyPaste = (e) => {
@@ -1187,22 +1140,109 @@ const StudentFlow = () => {
       const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
 
       if (e.type === 'paste') {
-        toast.error('Pasting is strictly prohibited during the examination. You must type your response directly.');
-        logInfraction(
+        let pastedText = '';
+        if (e.clipboardData) {
+          try {
+            pastedText = e.clipboardData.getData('text') || '';
+          } catch (err) {
+            void err;
+          }
+        }
+
+        const snippet = pastedText
+          ? ` | Captured Pasted Content: "${pastedText.slice(0, 300)}"`
+          : '';
+
+        toast.error('Pasting is strictly prohibited during the examination. You must type your response directly.', {
+          duration: 6000,
+          style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+        });
+
+        latestLogInfractionRef.current?.(
           'unauthorized_paste_attempt',
-          `Attempted clipboard paste into ${tag || 'exam field'} (action blocked)`,
+          `Attempted clipboard paste into ${tag || 'exam field'}${snippet} (action blocked)`,
           { severity: 'high', captureEvidence: true }
         );
-        recordMalpracticeStrike('Attempted clipboard paste into exam response');
+        latestRecordMalpracticeStrikeRef.current?.('Attempted clipboard paste into exam response');
       } else {
-        toast.error(`${action === 'CUT' ? 'Cutting' : 'Copying'} is strictly prohibited during the examination.`);
         const sel = window.getSelection()?.toString().trim();
-        const detail = sel
-          ? `Attempted to ${action} text: "${sel.slice(0, 80)}..." (action blocked)`
-          : `Attempted clipboard ${action} on ${tag || 'exam interface'} (action blocked)`;
+        const snippet = sel ? ` | Captured Selected Content: "${sel.slice(0, 200)}"` : '';
 
-        logInfraction('unauthorized_clipboard', detail, { severity: 'high', captureEvidence: true });
-        recordMalpracticeStrike(`Attempted unauthorized clipboard ${action}`);
+        toast.error(`${action === 'CUT' ? 'Cutting' : 'Copying'} is strictly prohibited during the examination.`, {
+          duration: 6000,
+          style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+        });
+
+        latestLogInfractionRef.current?.(
+          'unauthorized_clipboard',
+          `Attempted clipboard ${action} on ${tag || 'exam interface'}${snippet} (action blocked)`,
+          { severity: 'high', captureEvidence: true }
+        );
+        latestRecordMalpracticeStrikeRef.current?.(`Attempted unauthorized clipboard ${action}`);
+      }
+    };
+
+    // Mobile Keyboard input interception (Gboard, Samsung, iOS suggestions, clipboard chips)
+    const handleBeforeInput = (e) => {
+      const inputType = e.inputType || '';
+      const isPaste = inputType.toLowerCase().includes('paste') || inputType === 'insertFromDrop' || inputType === 'insertFromYank';
+
+      if (isPaste) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        let pastedText = '';
+        if (e.dataTransfer) {
+          try {
+            pastedText = e.dataTransfer.getData('text') || '';
+          } catch (err) {
+            void err;
+          }
+        } else if (e.data) {
+          pastedText = e.data;
+        }
+
+        const snippet = pastedText
+          ? ` | Captured Pasted Content: "${pastedText.slice(0, 300)}"`
+          : '';
+
+        toast.error('Pasting via mobile keyboard clipboard is strictly prohibited.', {
+          duration: 6000,
+          style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+        });
+
+        latestLogInfractionRef.current?.(
+          'unauthorized_paste_attempt',
+          `Mobile keyboard clipboard paste intercepted (inputType: ${inputType})${snippet} (action blocked)`,
+          { severity: 'high', captureEvidence: true }
+        );
+        latestRecordMalpracticeStrikeRef.current?.('Attempted mobile keyboard clipboard paste');
+      }
+    };
+
+    // Anti-selection enforcement: prevents long-press highlighting of questions or answers
+    const handleSelectionChange = () => {
+      if (examStateRef.current !== 'taking_exam') return;
+      const sel = window.getSelection();
+      if (!sel || !sel.toString().trim()) return;
+
+      const activeEl = document.activeElement;
+      const isInsideInput = activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT');
+
+      if (!isInsideInput) {
+        const text = sel.toString().trim();
+        sel.removeAllRanges();
+
+        latestLogInfractionRef.current?.(
+          'unauthorized_text_selection',
+          `Candidate selected exam question text: "${text.slice(0, 150)}" (selection cleared & blocked)`,
+          { severity: 'high', captureEvidence: true }
+        );
+        latestRecordMalpracticeStrikeRef.current?.('Attempted to select/copy exam text');
+        toast.error('Selecting or copying exam content is strictly prohibited.', {
+          duration: 5000,
+          style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+        });
       }
     };
 
@@ -1210,7 +1250,7 @@ const StudentFlow = () => {
       e.preventDefault();
       e.stopPropagation();
       toast.error('Drag and drop is strictly prohibited during the examination.');
-      logInfraction('unauthorized_drag_drop', 'Attempted unauthorized drag-and-drop into exam (action blocked)', { severity: 'medium', captureEvidence: true });
+      latestLogInfractionRef.current?.('unauthorized_drag_drop', 'Attempted unauthorized drag-and-drop into exam (action blocked)', { severity: 'medium', captureEvidence: true });
     };
 
     const preventDragOver = (e) => {
@@ -1220,6 +1260,7 @@ const StudentFlow = () => {
 
     const preventContextMenu = (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const sel = window.getSelection()?.toString().trim();
       const targetTag = e.target?.tagName ? e.target.tagName.toLowerCase() : 'unknown';
       let targetDesc = `element <${targetTag}>`;
@@ -1229,9 +1270,9 @@ const StudentFlow = () => {
         targetDesc = `exam question panel`;
       }
 
-      logInfraction(
+      latestLogInfractionRef.current?.(
         'context_menu_attempt',
-        `Right-click context menu attempted on ${targetDesc} (blocked to prevent developer inspect or external web search)`,
+        `Right-click or long-press context menu attempted on ${targetDesc} (blocked to prevent inspect or external web search)`,
         { severity: 'medium', captureEvidence: true }
       );
     };
@@ -1244,54 +1285,66 @@ const StudentFlow = () => {
         e.stopPropagation();
         const key = e.key.toLowerCase();
         if (key === 'v') {
-          toast.error('Pasting via shortcut (Ctrl+V / Cmd+V) is strictly prohibited. You must type your response directly.');
-          logInfraction('unauthorized_paste_shortcut', 'Attempted unauthorized paste via Ctrl+V / Cmd+V shortcut (action blocked)', { severity: 'high', captureEvidence: true });
-          recordMalpracticeStrike('Attempted unauthorized paste keyboard shortcut');
+          toast.error('Pasting via shortcut (Ctrl+V / Cmd+V) is strictly prohibited. You must type your response directly.', {
+            duration: 6000,
+            style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+          });
+          latestLogInfractionRef.current?.('unauthorized_paste_shortcut', 'Attempted unauthorized paste via Ctrl+V / Cmd+V shortcut (action blocked)', { severity: 'high', captureEvidence: true });
+          latestRecordMalpracticeStrikeRef.current?.('Attempted unauthorized paste keyboard shortcut');
         } else if (key === 'c') {
-          toast.error('Copying via shortcut (Ctrl+C / Cmd+C) is strictly prohibited.');
-          logInfraction('unauthorized_copy_shortcut', 'Attempted unauthorized copy via Ctrl+C / Cmd+C shortcut (action blocked)', { severity: 'high', captureEvidence: true });
-          recordMalpracticeStrike('Attempted unauthorized copy keyboard shortcut');
+          toast.error('Copying via shortcut (Ctrl+C / Cmd+C) is strictly prohibited.', {
+            duration: 5000,
+            style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+          });
+          latestLogInfractionRef.current?.('unauthorized_copy_shortcut', 'Attempted unauthorized copy via Ctrl+C / Cmd+C shortcut (action blocked)', { severity: 'high', captureEvidence: true });
+          latestRecordMalpracticeStrikeRef.current?.('Attempted unauthorized copy keyboard shortcut');
         } else if (key === 'x') {
-          toast.error('Cutting via shortcut (Ctrl+X / Cmd+X) is strictly prohibited.');
-          logInfraction('unauthorized_cut_shortcut', 'Attempted unauthorized cut via Ctrl+X / Cmd+X shortcut (action blocked)', { severity: 'high', captureEvidence: true });
-          recordMalpracticeStrike('Attempted unauthorized cut keyboard shortcut');
+          toast.error('Cutting via shortcut (Ctrl+X / Cmd+X) is strictly prohibited.', {
+            duration: 5000,
+            style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+          });
+          latestLogInfractionRef.current?.('unauthorized_cut_shortcut', 'Attempted unauthorized cut via Ctrl+X / Cmd+X shortcut (action blocked)', { severity: 'high', captureEvidence: true });
+          latestRecordMalpracticeStrikeRef.current?.('Attempted unauthorized cut keyboard shortcut');
         }
         return;
       }
       if ((e.shiftKey && e.key === 'Insert') || (e.ctrlKey && e.key === 'Insert')) {
         e.preventDefault();
         e.stopPropagation();
-        toast.error('Clipboard shortcut with Insert key is strictly prohibited.');
-        logInfraction('unauthorized_clipboard_shortcut', 'Attempted clipboard shortcut with Insert key (action blocked)', { severity: 'high', captureEvidence: true });
-        recordMalpracticeStrike('Attempted unauthorized clipboard shortcut');
+        toast.error('Clipboard shortcut with Insert key is strictly prohibited.', {
+          duration: 5000,
+          style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+        });
+        latestLogInfractionRef.current?.('unauthorized_clipboard_shortcut', 'Attempted clipboard shortcut with Insert key (action blocked)', { severity: 'high', captureEvidence: true });
+        latestRecordMalpracticeStrikeRef.current?.('Attempted unauthorized clipboard shortcut');
         return;
       }
 
       // 1. F12 Developer Tools
       if (e.key === 'F12') {
         e.preventDefault();
-        logInfraction('devtools_attempt', 'Attempted to open Developer Tools via F12 key (action blocked)', { severity: 'high', captureEvidence: true });
-        recordMalpracticeStrike('Attempted to open Developer Tools via F12');
+        latestLogInfractionRef.current?.('devtools_attempt', 'Attempted to open Developer Tools via F12 key (action blocked)', { severity: 'high', captureEvidence: true });
+        latestRecordMalpracticeStrikeRef.current?.('Attempted to open Developer Tools via F12');
         return;
       }
       // 2. Ctrl+Shift+I / J / C (or Cmd+Option+I / J / C)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'I', 'j', 'J', 'c', 'C'].includes(e.key)) {
         e.preventDefault();
-        logInfraction('devtools_attempt', `Attempted to open Developer Tools / Inspect Element via shortcut Ctrl+Shift+${e.key.toUpperCase()} (blocked)`, { severity: 'high', captureEvidence: true });
-        recordMalpracticeStrike('Attempted to inspect element or open Developer Tools');
+        latestLogInfractionRef.current?.('devtools_attempt', `Attempted to open Developer Tools / Inspect Element via shortcut Ctrl+Shift+${e.key.toUpperCase()} (blocked)`, { severity: 'high', captureEvidence: true });
+        latestRecordMalpracticeStrikeRef.current?.('Attempted to inspect element or open Developer Tools');
         return;
       }
       // 3. Ctrl+U: View Page Source
       if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')) {
         e.preventDefault();
-        logInfraction('source_code_inspection', 'Attempted to view exam page source code via Ctrl+U (blocked)', { severity: 'high', captureEvidence: true });
-        recordMalpracticeStrike('Attempted to inspect page source code');
+        latestLogInfractionRef.current?.('source_code_inspection', 'Attempted to view exam page source code via Ctrl+U (blocked)', { severity: 'high', captureEvidence: true });
+        latestRecordMalpracticeStrikeRef.current?.('Attempted to inspect page source code');
         return;
       }
       // 4. Ctrl+P / Ctrl+S: Save or Print Exam
       if ((e.ctrlKey || e.metaKey) && ['s', 'S', 'p', 'P'].includes(e.key)) {
         e.preventDefault();
-        logInfraction('save_print_attempt', `Attempted unauthorized browser shortcut (Ctrl+${e.key.toUpperCase()}) to save or print exam questions (blocked)`, { severity: 'medium', captureEvidence: true });
+        latestLogInfractionRef.current?.('save_print_attempt', `Attempted unauthorized browser shortcut (Ctrl+${e.key.toUpperCase()}) to save or print exam questions (blocked)`, { severity: 'medium', captureEvidence: true });
         return;
       }
       // 5. Navigation Hotkeys: Alt+Tab, Ctrl+Tab, Ctrl+T, Ctrl+N
@@ -1299,17 +1352,17 @@ const StudentFlow = () => {
         (e.altKey && e.key === 'Tab') ||
         ((e.ctrlKey || e.metaKey) && ['t', 'T', 'n', 'N', 'w', 'W'].includes(e.key))
       ) {
-        logInfraction('navigation_hotkey_attempt', `Attempted unauthorized navigation shortcut (${e.altKey ? 'Alt+Tab' : `Ctrl+${e.key.toUpperCase()}`}) to switch tabs or open new window`, { severity: 'medium', captureEvidence: true });
+        latestLogInfractionRef.current?.('navigation_hotkey_attempt', `Attempted unauthorized navigation shortcut (${e.altKey ? 'Alt+Tab' : `Ctrl+${e.key.toUpperCase()}`}) to switch tabs or open new window`, { severity: 'medium', captureEvidence: true });
       }
     };
 
     // Fullscreen enforcement
     const handleFullscreenChange = () => {
       if (examStateRef.current !== 'taking_exam') return;
-      if (isIOSModeRef.current) return; // iOS Safari does not support Fullscreen API on mobile devices
+      if (isIOSModeRef.current || isMobileProctorModeRef.current) return;
       if (!document.fullscreenElement) {
         setFullscreenLost(true);
-        logInfraction(
+        latestLogInfractionRef.current?.(
           'fullscreen_exit',
           'Exited fullscreen display mode',
           { severity: 'medium', captureEvidence: true }
@@ -1326,7 +1379,7 @@ const StudentFlow = () => {
       resizeDebounce = setTimeout(() => {
         const availW = window.screen.availWidth || window.screen.width;
         if (window.innerWidth < availW * 0.8) {
-          logInfraction(
+          latestLogInfractionRef.current?.(
             'window_resized_splitscreen',
             'Exam window resized (suspected split-screen layout alongside external applications or browser)',
             { severity: 'medium', captureEvidence: true }
@@ -1342,11 +1395,15 @@ const StudentFlow = () => {
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
     document.addEventListener("copy", preventCopyPaste, true);
     document.addEventListener("paste", preventCopyPaste, true);
     document.addEventListener("cut", preventCopyPaste, true);
+    document.addEventListener("beforeinput", handleBeforeInput, true);
+    document.addEventListener("selectionchange", handleSelectionChange);
     document.addEventListener("drop", preventDrop, true);
     document.addEventListener("dragover", preventDragOver, true);
     document.addEventListener("contextmenu", preventContextMenu);
@@ -1355,18 +1412,23 @@ const StudentFlow = () => {
     window.addEventListener("resize", handleResize);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    // Anti-selection
+    // Anti-selection & Mobile Callout Prevention
     document.body.style.userSelect = 'none';
     document.body.style.webkitUserSelect = 'none';
+    document.body.style.webkitTouchCallout = 'none';
 
     return () => {
       if (resizeDebounce) clearTimeout(resizeDebounce);
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("copy", preventCopyPaste, true);
       document.removeEventListener("paste", preventCopyPaste, true);
       document.removeEventListener("cut", preventCopyPaste, true);
+      document.removeEventListener("beforeinput", handleBeforeInput, true);
+      document.removeEventListener("selectionchange", handleSelectionChange);
       document.removeEventListener("drop", preventDrop, true);
       document.removeEventListener("dragover", preventDragOver, true);
       document.removeEventListener("contextmenu", preventContextMenu);
@@ -1376,8 +1438,9 @@ const StudentFlow = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.body.style.userSelect = 'auto';
       document.body.style.webkitUserSelect = 'auto';
+      document.body.style.webkitTouchCallout = 'default';
     };
-  }, [examState, activeExam, currentQuestionIndex, questions.length, timeLeft, categoryTimeLeft, isBlended]);
+  }, [examState, activeExam?.id]);
 
   // Inactivity auto-submit — deliberately its OWN effect, keyed only on
   // examState. The anti-cheat effect above re-mounts every second (it
@@ -1694,10 +1757,43 @@ useEffect(() => {
   latestSubmitExamRef.current = submitExam;
   latestLogInfractionRef.current = logInfraction;
   latestAdvanceRef.current = advanceCategoryOrSubmit;
+  latestRecordMalpracticeStrikeRef.current = recordMalpracticeStrike;
+  latestCaptureSnapshotRef.current = captureSnapshot;
+  categoryTimeLeftRef.current = categoryTimeLeft;
+  isBlendedRef.current = isBlended;
 });
 
   const handleAnswerChange = (qId, val) => {
-    setAnswers({ ...answers, [qId]: val });
+    const prevVal = answersRef.current[qId] || '';
+    const diffLen = val.length - prevVal.length;
+
+    // Reject bulk paste / text drops into answer fields (e.g. pasted paragraphs from external search)
+    if (diffLen > 5) {
+      let insertedText = '';
+      if (val.startsWith(prevVal)) {
+        insertedText = val.slice(prevVal.length);
+      } else {
+        insertedText = val;
+      }
+
+      toast.error('Bulk pasted text detected and rejected. You must type your response directly.', {
+        duration: 6000,
+        style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+      });
+
+      latestLogInfractionRef.current?.(
+        'unauthorized_paste_burst_detected',
+        `Bulk pasted text detected into response (+${diffLen} chars) | Captured Pasted Content: "${insertedText.slice(0, 300)}" (action blocked & reverted)`,
+        { severity: 'high', captureEvidence: true }
+      );
+
+      latestRecordMalpracticeStrikeRef.current?.('Pasted external content into exam response');
+
+      // Reject the paste - revert back to prevVal so the student cannot insert copied material
+      return;
+    }
+
+    setAnswers(prev => ({ ...prev, [qId]: val }));
   };
 
   const formatTime = (seconds) => {
@@ -1940,6 +2036,19 @@ useEffect(() => {
 
         {examState === 'taking_exam' && activeExam && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
+            {/* Global anti-copy and mobile text-selection disabler */}
+            <style>{`
+              body, html, * {
+                -webkit-touch-callout: none !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
+              }
+              textarea, input[type="text"], input[type="password"] {
+                -webkit-touch-callout: none !important;
+                -webkit-user-select: text !important;
+                user-select: text !important;
+              }
+            `}</style>
             {/* Screen Share Interrupted Blocking Overlay (Only on standard desktop mode when screen sharing was used) */}
             {screenShareLost && !isIOSDevice && !isMobileProctor && (
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
@@ -2200,22 +2309,79 @@ useEffect(() => {
                               onCopy={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                const sel = window.getSelection()?.toString().trim();
+                                const snippet = sel ? ` | Captured Selected Content: "${sel.slice(0, 200)}"` : '';
                                 toast.error('Copying is strictly prohibited during the examination.');
+                                latestLogInfractionRef.current?.(
+                                  'unauthorized_clipboard',
+                                  `Attempted to copy from essay response${snippet} (action blocked)`,
+                                  { severity: 'high', captureEvidence: true }
+                                );
+                                latestRecordMalpracticeStrikeRef.current?.('Attempted unauthorized copy from exam');
                               }}
                               onPaste={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                toast.error('Pasting is strictly prohibited during the examination. You must type your response directly.');
+                                let pasted = '';
+                                if (e.clipboardData) {
+                                  try {
+                                    pasted = e.clipboardData.getData('text') || '';
+                                  } catch (err) {
+                                    void err;
+                                  }
+                                }
+                                const snippet = pasted ? ` | Captured Pasted Content: "${pasted.slice(0, 300)}"` : '';
+                                toast.error('Pasting is strictly prohibited during the examination. You must type your response directly.', {
+                                  duration: 6000,
+                                  style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+                                });
+                                latestLogInfractionRef.current?.(
+                                  'unauthorized_paste_attempt',
+                                  `Prohibited paste attempt into essay response${snippet} (action blocked)`,
+                                  { severity: 'high', captureEvidence: true }
+                                );
+                                latestRecordMalpracticeStrikeRef.current?.('Attempted clipboard paste into exam response');
+                              }}
+                              onBeforeInput={(e) => {
+                                const inputType = e.inputType || '';
+                                const isPaste = inputType.toLowerCase().includes('paste') || inputType === 'insertFromDrop' || inputType === 'insertFromYank';
+                                if (isPaste) {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  let pasted = '';
+                                  if (e.dataTransfer) {
+                                    try {
+                                      pasted = e.dataTransfer.getData('text') || '';
+                                    } catch (err) {
+                                      void err;
+                                    }
+                                  } else if (e.data) {
+                                    pasted = e.data;
+                                  }
+                                  const snippet = pasted ? ` | Captured Pasted Content: "${pasted.slice(0, 300)}"` : '';
+                                  toast.error('Pasting via mobile keyboard clipboard is strictly prohibited.', {
+                                    duration: 6000,
+                                    style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+                                  });
+                                  latestLogInfractionRef.current?.(
+                                    'unauthorized_paste_attempt',
+                                    `Mobile keyboard clipboard paste blocked on essay (inputType: ${inputType})${snippet}`,
+                                    { severity: 'high', captureEvidence: true }
+                                  );
+                                  latestRecordMalpracticeStrikeRef.current?.('Attempted mobile keyboard clipboard paste');
+                                }
                               }}
                               onCut={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 toast.error('Cutting is strictly prohibited during the examination.');
+                                latestLogInfractionRef.current?.('unauthorized_cut', 'Attempted cut on essay response (action blocked)', { severity: 'high', captureEvidence: true });
                               }}
                               onDrop={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 toast.error('Drag and drop is strictly prohibited during the examination.');
+                                latestLogInfractionRef.current?.('unauthorized_drag_drop', 'Attempted drag and drop into essay field (action blocked)', { severity: 'medium', captureEvidence: true });
                               }}
                               onDragOver={(e) => {
                                 e.preventDefault();
@@ -2225,6 +2391,11 @@ useEffect(() => {
                                 e.preventDefault();
                                 e.stopPropagation();
                               }}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="sentences"
+                              spellCheck={false}
+                              data-gramm="false"
                               style={{ width: '100%', minHeight: '220px', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '1rem', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.95rem', resize: 'vertical', outline: 'none' }}
                               onFocus={(e) => e.target.style.borderColor = 'var(--border-focus)'}
                               onBlur={(e) => e.target.style.borderColor = 'var(--border-subtle)'}
