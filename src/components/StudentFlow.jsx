@@ -1220,7 +1220,7 @@ const StudentFlow = () => {
       }
     };
 
-    // Anti-selection enforcement: prevents long-press highlighting of questions or answers
+    // Anti-selection enforcement: clears highlighting on questions or answers to prevent copying
     const handleSelectionChange = () => {
       if (examStateRef.current !== 'taking_exam') return;
       const sel = window.getSelection();
@@ -1230,19 +1230,8 @@ const StudentFlow = () => {
       const isInsideInput = activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT');
 
       if (!isInsideInput) {
-        const text = sel.toString().trim();
+        // Immediately clear any selection to disallow copying, without issuing a strike for inadvertent touch/tap highlights
         sel.removeAllRanges();
-
-        latestLogInfractionRef.current?.(
-          'unauthorized_text_selection',
-          `Candidate selected exam question text: "${text.slice(0, 150)}" (selection cleared & blocked)`,
-          { severity: 'high', captureEvidence: true }
-        );
-        latestRecordMalpracticeStrikeRef.current?.('Attempted to select/copy exam text');
-        toast.error('Selecting or copying exam content is strictly prohibited.', {
-          duration: 5000,
-          style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
-        });
       }
     };
 
@@ -1763,34 +1752,38 @@ useEffect(() => {
   isBlendedRef.current = isBlended;
 });
 
-  const handleAnswerChange = (qId, val) => {
-    const prevVal = answersRef.current[qId] || '';
-    const diffLen = val.length - prevVal.length;
+  const handleAnswerChange = (qId, val, isTextInput = false) => {
+    // ONLY apply bulk-paste burst checks to freeform text inputs (short_essay / theory textarea)
+    // NEVER apply to multiple-choice (MCQ) or True/False options where val is the selected option string!
+    if (isTextInput) {
+      const prevVal = answersRef.current[qId] || '';
+      const diffLen = val.length - prevVal.length;
 
-    // Reject bulk paste / text drops into answer fields (e.g. pasted paragraphs from external search)
-    if (diffLen > 5) {
-      let insertedText = '';
-      if (val.startsWith(prevVal)) {
-        insertedText = val.slice(prevVal.length);
-      } else {
-        insertedText = val;
+      // Allow natural typing and word autocompletions. Reject anomalous bulk paste drops (> 25 characters in a single input burst)
+      if (diffLen > 25) {
+        let insertedText = '';
+        if (val.startsWith(prevVal)) {
+          insertedText = val.slice(prevVal.length);
+        } else {
+          insertedText = val;
+        }
+
+        toast.error('Bulk pasted text detected and rejected. You must type your response directly.', {
+          duration: 6000,
+          style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
+        });
+
+        latestLogInfractionRef.current?.(
+          'unauthorized_paste_burst_detected',
+          `Bulk pasted text detected into response (+${diffLen} chars) | Captured Pasted Content: "${insertedText.slice(0, 300)}" (action blocked & reverted)`,
+          { severity: 'high', captureEvidence: true }
+        );
+
+        latestRecordMalpracticeStrikeRef.current?.('Pasted external content into exam response');
+
+        // Reject the paste - revert back to prevVal so the student cannot insert copied material
+        return;
       }
-
-      toast.error('Bulk pasted text detected and rejected. You must type your response directly.', {
-        duration: 6000,
-        style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' }
-      });
-
-      latestLogInfractionRef.current?.(
-        'unauthorized_paste_burst_detected',
-        `Bulk pasted text detected into response (+${diffLen} chars) | Captured Pasted Content: "${insertedText.slice(0, 300)}" (action blocked & reverted)`,
-        { severity: 'high', captureEvidence: true }
-      );
-
-      latestRecordMalpracticeStrikeRef.current?.('Pasted external content into exam response');
-
-      // Reject the paste - revert back to prevVal so the student cannot insert copied material
-      return;
     }
 
     setAnswers(prev => ({ ...prev, [qId]: val }));
@@ -2305,7 +2298,7 @@ useEffect(() => {
                             <textarea
                               placeholder="Write your short essay response here (type directly; copying and pasting are prohibited)..."
                               value={answers[activeQ.id] || ''}
-                              onChange={(e) => handleAnswerChange(activeQ.id, e.target.value)}
+                              onChange={(e) => handleAnswerChange(activeQ.id, e.target.value, true)}
                               onCopy={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
