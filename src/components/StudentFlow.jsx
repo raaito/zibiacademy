@@ -48,6 +48,18 @@ export const detectIsIOS = () => {
   return Boolean(isDirectIOS || isIPadOS);
 };
 
+export const detectIsMobile = () => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const platform = navigator.platform || '';
+  if (/Android/i.test(ua) || /Android/i.test(platform)) return true;
+  if (/iPhone|iPod|iPad/i.test(ua) || /iPhone|iPod|iPad/i.test(platform)) return true;
+  if (platform === 'MacIntel' && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1) return true;
+  if (/Mobile|Tablet|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+  if (typeof window.innerWidth === 'number' && window.innerWidth <= 800 && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0) return true;
+  return false;
+};
+
 const wrapCanvasText = (ctx, text, x, y, maxWidth, lineHeight, maxLines = 6) => {
   if (!text) return;
   const words = String(text).split(' ');
@@ -122,9 +134,12 @@ const StudentFlow = () => {
   const [forfeitedReason, setForfeitedReason] = useState('');
   const MAX_MALPRACTICE_STRIKES = 3;
 
-  // iOS Option 4 Proctoring & State Tracking
+  // iOS & Mobile Proctoring & State Tracking
   const [isIOSDevice, setIsIOSDevice] = useState(false);
+  const [isMobileDeviceState, setIsMobileDeviceState] = useState(false);
+  const [isMobileProctor, setIsMobileProctor] = useState(false);
   const isIOSModeRef = React.useRef(false);
+  const isMobileProctorModeRef = React.useRef(false);
   const questionsRef = React.useRef([]);
   const currentQuestionIndexRef = React.useRef(0);
   const answersRef = React.useRef({});
@@ -139,7 +154,9 @@ const StudentFlow = () => {
 
   useEffect(() => {
     const isIOS = detectIsIOS();
+    const isMobile = detectIsMobile();
     setIsIOSDevice(isIOS);
+    setIsMobileDeviceState(isMobile);
     isIOSModeRef.current = isIOS;
   }, []);
 
@@ -188,12 +205,14 @@ const StudentFlow = () => {
       webcamStreamRef.current.getTracks().forEach(t => t.stop());
       webcamStreamRef.current = null;
     }
+    isMobileProctorModeRef.current = false;
+    setIsMobileProctor(false);
     exitFullscreenSafely();
   };
 
   const handleScreenShareStopped = () => {
     if (examStateRef.current !== 'taking_exam') return;
-    if (isIOSModeRef.current) return;
+    if (isIOSModeRef.current || isMobileProctorModeRef.current) return;
     setScreenShareLost(true);
     logInfraction(
       'screen_share_stopped',
@@ -204,13 +223,13 @@ const StudentFlow = () => {
   };
 
   const reenableScreenShare = async () => {
-    if (isIOSModeRef.current) {
+    if (isIOSModeRef.current || isMobileProctorModeRef.current) {
       setScreenShareLost(false);
       return true;
     }
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always', displaySurface: 'monitor' },
+        video: true,
         audio: false
       });
       screenStreamRef.current = stream;
@@ -237,7 +256,9 @@ const StudentFlow = () => {
   const requestProctoringStreams = async (examId) => {
     stopProctoringStreams();
     const isIOS = detectIsIOS();
+    const isMobile = detectIsMobile();
     setIsIOSDevice(isIOS);
+    setIsMobileDeviceState(isMobile);
     isIOSModeRef.current = isIOS;
 
     let screenGranted = false;
@@ -298,48 +319,110 @@ const StudentFlow = () => {
       return screenGranted;
     }
 
-    // 1. Mandatory Screen Capture on Desktop/Android (Captures candidate screen every 5s)
-    try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          cursor: 'always',
-          displaySurface: 'monitor',
-        },
-        audio: false
-      });
-      screenStreamRef.current = screenStream;
+    // 1. Mandatory Screen Capture on Desktop/Android (Try capturing candidate screen if supported)
+    if (typeof navigator?.mediaDevices?.getDisplayMedia === 'function') {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false
+        });
+        screenStreamRef.current = screenStream;
 
-      if (!screenVideoElRef.current) {
-        screenVideoElRef.current = document.createElement('video');
-        screenVideoElRef.current.playsInline = true;
-        screenVideoElRef.current.muted = true;
-      }
-      screenVideoElRef.current.srcObject = screenStream;
-      await screenVideoElRef.current.play();
+        if (!screenVideoElRef.current) {
+          screenVideoElRef.current = document.createElement('video');
+          screenVideoElRef.current.playsInline = true;
+          screenVideoElRef.current.muted = true;
+        }
+        screenVideoElRef.current.srcObject = screenStream;
+        await screenVideoElRef.current.play();
 
-      const screenTrack = screenStream.getVideoTracks()[0];
-      if (screenTrack) {
-        screenTrack.onended = () => {
-          handleScreenShareStopped();
-        };
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (screenTrack) {
+          screenTrack.onended = () => {
+            handleScreenShareStopped();
+          };
+        }
+        screenGranted = true;
+      } catch (err) {
+        console.warn('Screen capture via getDisplayMedia was cancelled or not supported on this device:', err);
       }
-      screenGranted = true;
-    } catch (err) {
-      console.error('Screen capture permission denied:', err);
+    }
+
+    // 2. Mobile Device Adaptive Proctoring:
+    // Mobile browsers (Android Chrome, mobile WebViews, etc.) either lack OS-level screen capture
+    // or disallow getDisplayMedia without specialized enterprise MDM profiles.
+    // Instead of displaying a blocking error, smoothly activate the front camera proctoring
+    // and live exam monitoring so the student can commence their exam seamlessly.
+    if (!screenGranted && (isMobile || typeof navigator?.mediaDevices?.getDisplayMedia !== 'function')) {
+      try {
+        const camStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: false
+        });
+        webcamStreamRef.current = camStream;
+        if (!webcamVideoElRef.current) {
+          webcamVideoElRef.current = document.createElement('video');
+          webcamVideoElRef.current.playsInline = true;
+          webcamVideoElRef.current.muted = true;
+          webcamVideoElRef.current.setAttribute('playsinline', '');
+          webcamVideoElRef.current.setAttribute('webkit-playsinline', '');
+        }
+        webcamVideoElRef.current.srcObject = camStream;
+        await webcamVideoElRef.current.play();
+
+        if (!canvasElRef.current) {
+          canvasElRef.current = document.createElement('canvas');
+        }
+        canvasElRef.current.width = 1280;
+        canvasElRef.current.height = 720;
+
+        screenGranted = true;
+        isMobileProctorModeRef.current = true;
+        setIsMobileProctor(true);
+
+        toast.success(
+          '📱 Mobile Device Connected: Live Front Camera & Active Exam Monitoring Enabled.',
+          { duration: 6000 }
+        );
+
+        if (user && examId) {
+          await supabase.from('infraction_logs').insert({
+            candidate_id: user.id,
+            assessment_id: examId,
+            infraction_type: 'device_mode_mobile',
+            details: 'Candidate started exam on mobile/Android device. Live front camera proctoring & active exam monitoring activated.',
+            severity: 'info'
+          });
+        }
+        return true;
+      } catch (camErr) {
+        console.error('Mobile camera access error:', camErr);
+        toast.error('Camera access is required for proctoring on mobile devices. Please allow camera access in your browser settings.', { duration: 8000 });
+        return false;
+      }
+    }
+
+    // 3. Strict Requirement on Desktop:
+    // On desktop PCs / laptops, full screen capture is strictly mandatory.
+    if (!screenGranted) {
       toast.error('Screen sharing is strictly mandatory for proctoring. You must select your ENTIRE SCREEN to begin.', { duration: 8000 });
       if (user && examId) {
         await supabase.from('infraction_logs').insert({
           candidate_id: user.id,
           assessment_id: examId,
           infraction_type: 'screen_share_denied',
-          details: `Screen sharing refused or cancelled at exam start: ${err.message}`,
+          details: 'Screen sharing refused or cancelled at exam start on desktop.',
           severity: 'high'
         });
       }
       return false;
     }
 
-    // 2. Also try requesting candidate webcam for live face Picture-in-Picture
+    // 4. Also try requesting candidate webcam on desktop for live face Picture-in-Picture
     try {
       const camStream = await navigator.mediaDevices.getUserMedia({
         video: { width: 320, height: 240 },
@@ -357,7 +440,7 @@ const StudentFlow = () => {
       console.warn('Webcam stream unavailable, continuing with screen capture only:', camErr);
     }
 
-    // 3. Setup high-res snapshot canvas (1280x720 for crisp readable screen text)
+    // 5. Setup high-res snapshot canvas (1280x720 for crisp readable screen text)
     if (!canvasElRef.current) {
       canvasElRef.current = document.createElement('canvas');
     }
@@ -380,11 +463,13 @@ const StudentFlow = () => {
       const ctx = canvas.getContext('2d');
       
       const isIOS = isIOSModeRef.current === true;
+      const isMobileProctor = isMobileProctorModeRef.current === true;
+      const useComposite = isIOS || (isMobileProctor && (!screenVideoElRef.current || screenVideoElRef.current.videoWidth === 0));
 
-      if (isIOS) {
+      if (useComposite) {
         // ========================================================
-        // OPTION 4: iOS LIVE EXAM CANVAS & FRONT CAMERA COMPOSITE
-        // (Applies ONLY to strictly confirmed Apple iOS devices)
+        // OPTION 4 / MOBILE: LIVE EXAM CANVAS & FRONT CAMERA COMPOSITE
+        // (Applies to Apple iOS & Mobile devices without screen sharing)
         // ========================================================
         ctx.fillStyle = '#0a0d14';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -557,7 +642,7 @@ const StudentFlow = () => {
         ctx.font = '12px sans-serif';
         ctx.fillText(`Candidate: ${profile?.full_name || 'Student'}`, vidX + 14, metaY + 48);
         ctx.fillText(`Matric No: ${profile?.matriculation_number || user?.email || 'N/A'}`, vidX + 14, metaY + 70);
-        ctx.fillText(`Device Mode: Apple iOS • Option 4 (Canvas & Camera)`, vidX + 14, metaY + 92);
+        ctx.fillText(`Device Mode: ${isIOS ? 'Apple iOS • Option 4 (Canvas & Camera)' : 'Mobile Device • Live Camera & Canvas'}`, vidX + 14, metaY + 92);
         ctx.fillText(`Active Question: #${curIdx + 1} of ${qList.length}`, vidX + 14, metaY + 114);
 
         ctx.fillStyle = '#22c55e';
@@ -613,13 +698,14 @@ const StudentFlow = () => {
 
       ctx.fillStyle = '#c5a059';
       ctx.font = 'bold 12px sans-serif';
-      ctx.fillText(isIOS ? 'DTMD iOS PROCTOR (OPTION 4)' : 'DTMD STRICT SCREEN PROCTOR', 14, canvas.height - 14);
+      const watermarkTitle = isIOS ? 'DTMD iOS PROCTOR (OPTION 4)' : isMobileProctor ? 'DTMD MOBILE PROCTOR' : 'DTMD STRICT SCREEN PROCTOR';
+      ctx.fillText(watermarkTitle, 14, canvas.height - 14);
 
       ctx.fillStyle = '#e2e8f0';
       ctx.font = '12px sans-serif';
       const timeStr = new Date(now).toLocaleString();
       const candStr = `${profile?.full_name || 'Student'} (${profile?.matriculation_number || user?.email || 'N/A'})`;
-      ctx.fillText(` | Candidate: ${candStr} | Event: ${trigger.toUpperCase()} | ${timeStr}`, isIOS ? 230 : 220, canvas.height - 14);
+      ctx.fillText(` | Candidate: ${candStr} | Event: ${trigger.toUpperCase()} | ${timeStr}`, isIOS ? 230 : isMobileProctor ? 200 : 220, canvas.height - 14);
 
       const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.70));
       if (!blob) return null;
@@ -782,12 +868,17 @@ const StudentFlow = () => {
 
   const captureDeviceInfo = () => {
     const isIOS = detectIsIOS();
+    const isMobile = detectIsMobile();
     const ua = navigator.userAgent;
     const platform = navigator.platform || 'unknown';
     const screen = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
     const lang = navigator.language || 'unknown';
-    const iosTag = isIOS ? ' | Mode: iOS Option 4 (Canvas & Camera)' : ' | Mode: Desktop/Android Screen Share';
-    setDeviceInfo(`UA: ${ua} | Platform: ${platform} | Screen: ${screen} | Lang: ${lang}${iosTag}`);
+    const modeTag = isIOS
+      ? ' | Mode: iOS Option 4 (Canvas & Camera)'
+      : isMobile
+      ? ' | Mode: Mobile Device (Live Camera & Canvas)'
+      : ' | Mode: Desktop Strict Screen Share';
+    setDeviceInfo(`UA: ${ua} | Platform: ${platform} | Screen: ${screen} | Lang: ${lang}${modeTag}`);
 
     fetch('https://api.ipify.org?format=json')
       .then(r => r.json())
@@ -1038,9 +1129,9 @@ const StudentFlow = () => {
       awaySinceRef.current = null;
 
       // Smart iOS/Mobile threshold:
-      // Micro-interruptions (< 6s) like swiping an iOS notification banner or incoming call dismissal
+      // Micro-interruptions (< 6s) like swiping an iOS/Android notification banner or incoming call dismissal
       // are logged as low-severity notice without malpractice strike.
-      if (isIOSModeRef.current && durationSec < 6) {
+      if ((isIOSModeRef.current || isMobileProctorModeRef.current) && durationSec < 6) {
         logInfraction(
           'mobile_focus_interruption',
           'Brief mobile focus interruption or notification banner dismissal',
@@ -1068,8 +1159,8 @@ const StudentFlow = () => {
         { severity, durationSeconds: durationSec, captureEvidence: true }
       );
 
-      // Malpractice strike ONLY for sustained absence (>= 15s) or repeated genuine tab switching (>= 3 times of >= 4s desktop / >= 6s iOS)
-      const minRepeatedAwaySec = isIOSModeRef.current ? 6 : 4;
+      // Malpractice strike ONLY for sustained absence (>= 15s) or repeated genuine tab switching (>= 3 times of >= 4s desktop / >= 6s mobile)
+      const minRepeatedAwaySec = (isIOSModeRef.current || isMobileProctorModeRef.current) ? 6 : 4;
       if (durationSec >= 15 || (genuineAwayCountRef.current >= 3 && durationSec >= minRepeatedAwaySec)) {
         recordMalpracticeStrike('Exited exam window or switched away from the active examination');
       }
@@ -1801,11 +1892,13 @@ useEffect(() => {
 
                 <div style={{ background: 'rgba(255, 195, 0, 0.08)', border: '1px solid rgba(255, 195, 0, 0.25)', borderRadius: '8px', padding: '0.85rem 1rem', marginBottom: '1.25rem', textAlign: 'left' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold, #ffc300)', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
-                    <span>{isIOSDevice ? '📱' : '🖥️'}</span> {isIOSDevice ? 'Apple iOS Proctoring Notice (Option 4)' : 'Screen Capture Notice'}
+                    <span>{isIOSDevice || isMobileDeviceState ? '📱' : '🖥️'}</span> {isIOSDevice ? 'Apple iOS Proctoring Notice (Option 4)' : isMobileDeviceState ? 'Mobile Proctoring Notice' : 'Screen Capture Notice'}
                   </div>
                   <p style={{ margin: 0, color: 'var(--text-muted, #ccc)', fontSize: '0.82rem', lineHeight: '1.5' }}>
                     {isIOSDevice
                       ? 'You are taking this exam on an iPhone/iPad. The system will activate your front camera and composite your exam canvas into proctoring evidence snapshots. Tip: Turn on "Do Not Disturb" (Focus Mode) so notifications do not interrupt your exam window.'
+                      : isMobileDeviceState
+                      ? 'You are taking this exam on a mobile device. The system will activate secure mobile camera surveillance and active exam monitoring. Tip: Turn on "Do Not Disturb" so calls and notification banners do not interrupt your exam window.'
                       : 'During this assessment, you will be prompted to share your screen for proctoring verification. Please ensure you select your entire screen.'}
                   </p>
                 </div>
@@ -1836,7 +1929,7 @@ useEffect(() => {
                     onClick={() => { setConfirmExam(null); startExam(confirmExam); }}
                     style={{ flex: 1, padding: '0.75rem', fontSize: '0.9rem' }}
                   >
-                    {isIOSDevice ? '📱 Enable Camera & Begin' : '🖥️ Share Screen & Begin'}
+                    {isIOSDevice ? '📱 Enable Camera & Begin' : isMobileDeviceState ? '📱 Commence Mobile Exam' : '🖥️ Share Screen & Begin'}
                   </button>
                 </div>
               </div>
@@ -1847,8 +1940,8 @@ useEffect(() => {
 
         {examState === 'taking_exam' && activeExam && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-            {/* Screen Share Interrupted Blocking Overlay (Only on standard desktop/android mode) */}
-            {screenShareLost && !isIOSDevice && (
+            {/* Screen Share Interrupted Blocking Overlay (Only on standard desktop mode when screen sharing was used) */}
+            {screenShareLost && !isIOSDevice && !isMobileProctor && (
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
                 <div style={{ background: '#18181b', border: '2px solid #ef4444', borderRadius: '12px', padding: '2rem', maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(239,68,68,0.3)' }}>
                   <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
@@ -1932,9 +2025,17 @@ useEffect(() => {
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  <span>Proctoring Engine: <span style={{ color: '#4ade80', fontWeight: '600' }}>{isIOSDevice ? 'Active (iOS Option 4: Front Cam & Exam Canvas Composite)' : 'Active & Recording Screen (5s Snapshots)'}</span></span>
+                  <span>Proctoring Engine: <span style={{ color: '#4ade80', fontWeight: '600' }}>
+                    {isIOSDevice
+                      ? 'Active (iOS Option 4: Front Cam & Exam Canvas Composite)'
+                      : isMobileProctor
+                      ? 'Active (Mobile Front Camera & Active Canvas)'
+                      : 'Active & Recording Screen (5s Snapshots)'}
+                  </span></span>
                   <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-                  <span style={{ color: '#38bdf8' }}>{isIOSDevice ? 'Front Camera Surveillance: Live' : 'Face Verification: In-Frame'}</span>
+                  <span style={{ color: '#38bdf8' }}>
+                    {isIOSDevice || isMobileProctor ? 'Front Camera Surveillance: Live' : 'Face Verification: In-Frame'}
+                  </span>
                 </div>
                 {activeExam.instructions && (
                   <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(197,160,89,0.08)', border: '1px solid var(--border-focus)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
@@ -2351,8 +2452,8 @@ useEffect(() => {
               </div>
             )}
 
-            {/* Floating iOS Proctor Surveillance Pill */}
-            {isIOSDevice && (
+            {/* Floating iOS / Mobile Proctor Surveillance Pill */}
+            {(isIOSDevice || isMobileProctor) && (
               <div style={{
                 position: 'fixed',
                 bottom: '16px',
@@ -2372,7 +2473,9 @@ useEffect(() => {
                 pointerEvents: 'none'
               }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 8px #22c55e' }} />
-                <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>iOS Option 4:</span>
+                <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>
+                  {isIOSDevice ? 'iOS Option 4:' : 'Mobile Proctor:'}
+                </span>
                 <span>Front Cam &amp; Canvas Active</span>
               </div>
             )}
