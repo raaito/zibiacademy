@@ -402,7 +402,7 @@ const StudentFlow = () => {
   const webcamVideoElRef = React.useRef(null);
   const canvasElRef = React.useRef(null);
   const lastCaptureAtRef = React.useRef(0);
-  const MIN_CAPTURE_INTERVAL_MS = 3500; // Throttle to prevent duplicate concurrent captures
+  const MIN_CAPTURE_INTERVAL_MS = 600; // Throttle allowing crisp 1-second continuous captures
 
   // Away-tracking & violation counters
   const awaySinceRef = React.useRef(null);
@@ -1440,11 +1440,11 @@ const StudentFlow = () => {
         );
 
         latestRecordMalpracticeStrikeRef.current?.(
-          `Switched to another browser tab or external application (${durationSec}s away)`
+          'Switched to another browser tab or external application'
         );
 
         toast.error(
-          `🚨 PROHIBITED TAB SWITCH DETECTED: You navigated away from the exam for ${durationSec}s (${depStr} to ${retStr}). Dual-frame evidence logged for school audit!`,
+          '🚨 PROHIBITED TAB SWITCH DETECTED: You navigated away from the exam. Tab switching to search for answers is strictly prohibited and recorded as malpractice!',
           { duration: 7000, style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' } }
         );
       } else if (departureReason === 'window_blur') {
@@ -1473,7 +1473,7 @@ const StudentFlow = () => {
 
         if (durationSec >= 6) {
           latestRecordMalpracticeStrikeRef.current?.(
-            `Lost window focus to external application (${durationSec}s)`
+            'Lost window focus to external application'
           );
         }
       }
@@ -1833,9 +1833,8 @@ const StudentFlow = () => {
   // that effect would be torn down and restarted every second and never
   // actually fire. This effect only depends on examState/activeExam.id, so
   // the interval survives for the whole exam.
-  // Visual snapshot every 5s for the whole exam, as required for proctoring.
-  // At 320x240 JPEG (~15KB) a 60-minute exam costs roughly 10MB of storage.
-  const HEARTBEAT_INTERVAL_MS = 5000;
+  // Visual snapshot every 1 second continuously for the whole exam, as required for proctoring.
+  const HEARTBEAT_INTERVAL_MS = 1000;
   useEffect(() => {
     if (examState !== 'taking_exam' || !activeExam || !user) return;
 
@@ -1858,10 +1857,10 @@ const StudentFlow = () => {
       }
     };
 
-    // Delay initial baseline frame by 1.5s so video element has time to receive initial screen frames
+    // Delay initial baseline frame by 500ms so video element has time to receive initial screen frames
     const initialTimer = setTimeout(() => {
       captureHeartbeat();
-    }, 1500);
+    }, 500);
     const interval = setInterval(captureHeartbeat, HEARTBEAT_INTERVAL_MS);
     return () => {
       clearTimeout(initialTimer);
@@ -2504,7 +2503,7 @@ useEffect(() => {
                       ? 'Active (iOS Option 4: Front Cam & Exam Canvas Composite)'
                       : isMobileProctor
                       ? 'Active (Mobile Front Camera & Active Canvas)'
-                      : 'Active & Recording Screen (5s Snapshots)'}
+                      : 'Active & Recording Screen (1s Continuous Snapshots)'}
                   </span></span>
                   <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
                   <span style={{ color: '#38bdf8' }}>

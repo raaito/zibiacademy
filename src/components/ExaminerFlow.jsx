@@ -2046,7 +2046,7 @@ const ExaminerFlow = () => {
                               <span>☁️ Cloud Storage Archival &amp; Server Maintenance</span>
                             </h4>
                             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                              To save server storage space, download all 5-second snapshots in 1-click as a ZIP, upload them to <strong>TeraBox</strong> (or Google Drive/OneDrive), save the link below, and purge server copies.
+                              To save server storage space, download all 1-second snapshots in 1-click as a ZIP, upload them to <strong>TeraBox</strong> (or Google Drive/OneDrive), save the link below, and purge server copies.
                             </p>
                           </div>
 
@@ -2382,7 +2382,7 @@ const ExaminerFlow = () => {
                                         letterSpacing: '0.02em'
                                       }}>
                                         {snap.rawTrigger === 'heartbeat'
-                                          ? '5S SNAP'
+                                          ? '1S SNAP'
                                           : isDeparture
                                           ? '🚪 DEPARTURE'
                                           : isReturn
