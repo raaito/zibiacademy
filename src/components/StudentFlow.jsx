@@ -87,6 +87,235 @@ const wrapCanvasText = (ctx, text, x, y, maxWidth, lineHeight, maxLines = 6) => 
   ctx.fillText(line, x, currentY);
 };
 
+// ========================================================
+// FORENSIC BIOMETRIC HUD & WATERMARKING ENGINE
+// ========================================================
+const drawForensicHUD = (ctx, x, y, w, h, opts = {}) => {
+  const {
+    isBreach = false,
+    isAway = false,
+    strikes = 0,
+    matricNo = '',
+    candidateName = '',
+    timestamp = Date.now()
+  } = opts;
+
+  ctx.save();
+  const alertColor = isBreach || isAway ? '#ef4444' : '#c5a059';
+
+  // 1. Four Corner Targeting Brackets [  ]
+  const bLen = Math.min(22, Math.max(12, Math.round(w * 0.08)));
+  ctx.strokeStyle = alertColor;
+  ctx.lineWidth = 2.5;
+
+  // Top-left bracket
+  ctx.beginPath();
+  ctx.moveTo(x + 10, y + 10 + bLen);
+  ctx.lineTo(x + 10, y + 10);
+  ctx.lineTo(x + 10 + bLen, y + 10);
+  ctx.stroke();
+
+  // Top-right bracket
+  ctx.beginPath();
+  ctx.moveTo(x + w - 10 - bLen, y + 10);
+  ctx.lineTo(x + w - 10, y + 10);
+  ctx.lineTo(x + w - 10, y + 10 + bLen);
+  ctx.stroke();
+
+  // Bottom-left bracket
+  ctx.beginPath();
+  ctx.moveTo(x + 10, y + h - 10 - bLen);
+  ctx.lineTo(x + 10, y + h - 10);
+  ctx.lineTo(x + 10 + bLen, y + h - 10);
+  ctx.stroke();
+
+  // Bottom-right bracket
+  ctx.beginPath();
+  ctx.moveTo(x + w - 10 - bLen, y + h - 10);
+  ctx.lineTo(x + w - 10, y + h - 10);
+  ctx.lineTo(x + w - 10, y + h - 10 - bLen);
+  ctx.stroke();
+
+  // 2. Center Face/Gaze Target Reticle & Crosshair (unobtrusive, fine lines)
+  const cx = x + Math.round(w / 2);
+  const cy = y + Math.round(h * 0.44); // Eye level target
+
+  ctx.strokeStyle = isBreach || isAway ? 'rgba(239, 68, 68, 0.45)' : 'rgba(56, 189, 248, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+
+  // Subtle circular reticle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 26, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Crosshair ticks
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(cx - 36, cy); ctx.lineTo(cx - 28, cy);
+  ctx.moveTo(cx + 28, cy); ctx.lineTo(cx + 36, cy);
+  ctx.moveTo(cx, cy - 36); ctx.lineTo(cx, cy - 28);
+  ctx.moveTo(cx, cy + 28); ctx.lineTo(cx, cy + 36);
+  ctx.stroke();
+
+  // Subtle eye-level guideline
+  ctx.strokeStyle = isBreach || isAway ? 'rgba(239, 68, 68, 0.25)' : 'rgba(197, 160, 89, 0.25)';
+  ctx.beginPath();
+  ctx.moveTo(x + 24, cy);
+  ctx.lineTo(x + w - 24, cy);
+  ctx.stroke();
+
+  // 3. Top HUD Status Bar
+  ctx.fillStyle = 'rgba(10, 13, 22, 0.85)';
+  ctx.fillRect(x + 8, y + 8, w - 16, 22);
+  ctx.strokeStyle = alertColor;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 8, y + 8, w - 16, 22);
+
+  ctx.fillStyle = alertColor;
+  ctx.font = 'bold 10px monospace';
+  const idStr = matricNo ? `ID: ${String(matricNo).slice(0, 14)}` : 'BIOMETRIC CAM';
+  ctx.fillText(idStr, x + 14, y + 23);
+
+  // Status tag on right of top bar
+  const statusStr = isBreach || isAway 
+    ? '🔴 TARGET DEFECTED / AWAY' 
+    : '🟢 GAZE: LOCKED & VERIFIED';
+  ctx.fillStyle = isBreach || isAway ? '#ef4444' : '#22c55e';
+  ctx.font = 'bold 9px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(statusStr, x + w - 14, y + 23);
+  ctx.textAlign = 'left';
+
+  // 4. Bottom-Left: Malpractice Strike Meter Watermark Badge
+  const strikeBadgeW = 142;
+  const strikeBadgeH = 20;
+  const badgeX = x + 8;
+  const badgeY = y + h - 28;
+
+  let strikeBg = 'rgba(22, 101, 52, 0.92)'; // clean green
+  let strikeBorder = '#22c55e';
+  let strikeText = '🛡️ STRIKES: 0/3 [CLEAN]';
+
+  if (strikes === 1) {
+    strikeBg = 'rgba(180, 83, 9, 0.92)'; // amber
+    strikeBorder = '#f59e0b';
+    strikeText = '⚠️ STRIKE: 1/3 [WARNING]';
+  } else if (strikes === 2) {
+    strikeBg = 'rgba(185, 28, 28, 0.92)'; // red
+    strikeBorder = '#ef4444';
+    strikeText = '🚨 STRIKES: 2/3 [FINAL]';
+  } else if (strikes >= 3) {
+    strikeBg = 'rgba(127, 29, 29, 0.95)'; // dark red
+    strikeBorder = '#f87171';
+    strikeText = '⛔ STRIKES: 3/3 [FORFEIT]';
+  }
+
+  ctx.fillStyle = strikeBg;
+  ctx.fillRect(badgeX, badgeY, strikeBadgeW, strikeBadgeH);
+  ctx.strokeStyle = strikeBorder;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(badgeX, badgeY, strikeBadgeW, strikeBadgeH);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 9px monospace';
+  ctx.fillText(strikeText, badgeX + 6, badgeY + 14);
+
+  // 5. Bottom-Right: High-Precision Millisecond Timestamp
+  const timeStr = new Date(timestamp).toISOString().substring(11, 23) + ' UTC';
+  ctx.fillStyle = 'rgba(10, 13, 22, 0.8)';
+  ctx.fillRect(x + w - 124, badgeY, 116, strikeBadgeH);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+  ctx.strokeRect(x + w - 124, badgeY, 116, strikeBadgeH);
+
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '9px monospace';
+  ctx.fillText(timeStr, x + w - 118, badgeY + 14);
+
+  ctx.restore();
+};
+
+const drawBreachBanner = (ctx, canvasWidth, opts = {}) => {
+  const {
+    isDeparture = false,
+    isReturn = false,
+    breachDurationSec = null,
+    departureTime = null,
+    returnTime = null,
+    strikeCount = 0,
+    questionNum = 1,
+    totalQuestions = 1,
+    curAns = ''
+  } = opts;
+
+  if (!isDeparture && !isReturn) return 0;
+
+  ctx.save();
+  const bannerH = isReturn ? 68 : 56;
+
+  if (isDeparture) {
+    // Frame 1: Departure Frame
+    ctx.fillStyle = 'rgba(127, 29, 29, 0.97)';
+    ctx.fillRect(0, 0, canvasWidth, bannerH);
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(0, 0, canvasWidth, bannerH);
+
+    // Hazard accent bar on top
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(0, 0, canvasWidth, 4);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('🚨 PROCTORING BREACH SEQUENCE • FRAME 1: CANDIDATE DEPARTURE DETECTED', 16, 26);
+
+    ctx.fillStyle = '#fca5a5';
+    ctx.font = '12px sans-serif';
+    const depStr = new Date(departureTime || Date.now()).toLocaleTimeString();
+    ctx.fillText(
+      `Status: Candidate navigated away / minimized exam viewport at ${depStr} | Active Question: #${questionNum} of ${totalQuestions} | Recorded Response: "${String(curAns || 'Unanswered').slice(0, 28)}"`,
+      16,
+      46
+    );
+  } else if (isReturn) {
+    // Frame 2: Return Frame
+    ctx.fillStyle = 'rgba(136, 19, 19, 0.98)';
+    ctx.fillRect(0, 0, canvasWidth, bannerH);
+    ctx.strokeStyle = '#f87171';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(0, 0, canvasWidth, bannerH);
+
+    // Hazard accent bar
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(0, 0, canvasWidth, 4);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText(`🚨 PROCTORING BREACH SEQUENCE • FRAME 2: RETURN DETECTED (${breachDurationSec || '?'}s ABSENCE)`, 16, 24);
+
+    ctx.fillStyle = '#fde047';
+    ctx.font = 'bold 12px monospace';
+    const depStr = departureTime ? new Date(departureTime).toLocaleTimeString() : 'N/A';
+    const retStr = returnTime ? new Date(returnTime).toLocaleTimeString() : new Date().toLocaleTimeString();
+    ctx.fillText(
+      `BREACH WINDOW: Departed at ${depStr} ➔ Returned at ${retStr} (TOTAL ABSENCE: ${breachDurationSec || '?'} SECONDS OUTSIDE EXAM)`,
+      16,
+      43
+    );
+
+    ctx.fillStyle = '#fecaca';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(
+      `MALPRACTICE RECORDED: Strike #${strikeCount || 1} of 3 • Candidate defection from test environment logged for school disciplinary audit`,
+      16,
+      60
+    );
+  }
+
+  ctx.restore();
+  return bannerH;
+};
+
 const StudentFlow = () => {
   const { user, profile } = useAuth();
   const [examState, setExamState] = useState('dashboard'); // dashboard, taking_exam, finished
@@ -184,6 +413,12 @@ const StudentFlow = () => {
   const latestCaptureSnapshotRef = React.useRef(null);
   const categoryTimeLeftRef = React.useRef(0);
   const isBlendedRef = React.useRef(false);
+  const malpracticeStrikesRef = React.useRef(0);
+  useEffect(() => {
+    malpracticeStrikesRef.current = malpracticeStrikes;
+  }, [malpracticeStrikes]);
+  const lastDeparturePathRef = React.useRef(null);
+  const lastDepartureTimeRef = React.useRef(null);
 
   const exitFullscreenSafely = () => {
     try {
@@ -400,8 +635,8 @@ const StudentFlow = () => {
   };
 
   // Captures student screen (with optional face PiP in corner) every 5s & on infractions
-  // On iOS (Option 4): Generates high-fidelity composite of virtual exam canvas + live front camera feed
-  const captureSnapshot = async (trigger, force = false) => {
+  // On iOS / Mobile: Generates high-fidelity composite of virtual exam canvas + live front camera feed with Forensic HUD
+  const captureSnapshot = async (trigger, force = false, meta = {}) => {
     if ((!screenStreamRef.current && !webcamStreamRef.current) || !canvasElRef.current) return null;
     const now = Date.now();
     if (!force && now - lastCaptureAtRef.current < MIN_CAPTURE_INTERVAL_MS) return null;
@@ -415,36 +650,61 @@ const StudentFlow = () => {
       const isMobileProctor = isMobileProctorModeRef.current === true;
       const useComposite = isIOS || isMobileProctor || (!screenVideoElRef.current || screenVideoElRef.current.videoWidth === 0);
 
+      const isDepartureTrigger = meta.isDeparture === true || trigger === 'tab_departure' || trigger === 'navigated_away';
+      const isReturnTrigger = meta.isReturn === true || trigger === 'tab_return' || trigger === 'window_blur_return';
+      const isAwayTrigger = isDepartureTrigger || isReturnTrigger || trigger === 'tab_or_window_switch' || trigger === 'window_blur';
+      const currentStrikes = malpracticeStrikesRef.current || 0;
+
+      const curIdx = currentQuestionIndexRef.current || 0;
+      const qList = questionsRef.current || [];
+      const curQ = qList[curIdx] || null;
+      const ansMap = answersRef.current || {};
+      const curAns = curQ ? ansMap[curQ.id] : null;
+      const curExam = activeExamRef.current;
+      const curTime = timeLeftRef.current || 0;
+
+      ctx.fillStyle = '#0a0d14';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Render top forensic breach banner if candidate departed or returned
+      const bannerH = drawBreachBanner(ctx, canvas.width, {
+        isDeparture: isDepartureTrigger,
+        isReturn: isReturnTrigger,
+        breachDurationSec: meta.breachDurationSec,
+        departureTime: meta.departureTime,
+        returnTime: meta.returnTime,
+        strikeCount: currentStrikes,
+        questionNum: curIdx + 1,
+        totalQuestions: qList.length,
+        curAns
+      });
+
+      const barH = 38;
+
       if (useComposite) {
         // ========================================================
         // OPTION 4 / MOBILE: LIVE EXAM CANVAS & FRONT CAMERA COMPOSITE
         // (Applies to Apple iOS & Mobile devices without screen sharing)
         // ========================================================
-        ctx.fillStyle = '#0a0d14';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const topY = bannerH > 0 ? bannerH + 8 : 16;
+        const panelsHeight = canvas.height - topY - barH - 8;
 
-        const curIdx = currentQuestionIndexRef.current || 0;
-        const qList = questionsRef.current || [];
-        const curQ = qList[curIdx] || null;
-        const ansMap = answersRef.current || {};
-        const curAns = curQ ? ansMap[curQ.id] : null;
-        const curExam = activeExamRef.current;
-        const curTime = timeLeftRef.current || 0;
-
-        // Left Panel: Virtual Exam Terminal (750 x 650)
+        // Left Panel: Virtual Exam Terminal (750 x panelsHeight)
+        const leftX = 16;
+        const leftW = 750;
         ctx.fillStyle = '#121622';
-        ctx.fillRect(16, 16, 750, 650);
-        ctx.strokeStyle = 'rgba(197, 160, 89, 0.5)';
+        ctx.fillRect(leftX, topY, leftW, panelsHeight);
+        ctx.strokeStyle = isAwayTrigger ? 'rgba(239, 68, 68, 0.4)' : 'rgba(197, 160, 89, 0.5)';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(16, 16, 750, 650);
+        ctx.strokeRect(leftX, topY, leftW, panelsHeight);
 
         // Header bar in left panel
         ctx.fillStyle = '#181f2e';
-        ctx.fillRect(16, 16, 750, 48);
+        ctx.fillRect(leftX, topY, leftW, 46);
         ctx.fillStyle = '#c5a059';
         ctx.font = 'bold 15px sans-serif';
         const examTitle = `${curExam?.course_code || 'EXAM'} • ${curExam?.course_name || 'Active Assessment'}`;
-        ctx.fillText(examTitle.slice(0, 52), 32, 46);
+        ctx.fillText(examTitle.slice(0, 50), leftX + 16, topY + 28);
 
         // Timer badge in header
         ctx.fillStyle = '#e2e8f0';
@@ -452,119 +712,124 @@ const StudentFlow = () => {
         const m = Math.floor(curTime / 60);
         const s = curTime % 60;
         const timeFmt = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        ctx.fillText(`⏱ REMAINING: ${timeFmt}`, 580, 46);
+        ctx.fillText(`⏱ REMAINING: ${timeFmt}`, leftX + 570, topY + 28);
 
         // Question Tracker Subheader
         ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-        ctx.fillRect(32, 78, 718, 38);
+        ctx.fillRect(leftX + 16, topY + 56, leftW - 32, 34);
         ctx.fillStyle = '#c5a059';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`QUESTION ${curIdx + 1} OF ${qList.length}`, 44, 102);
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText(`QUESTION ${curIdx + 1} OF ${qList.length}`, leftX + 26, topY + 78);
 
         if (curQ?.category) {
           ctx.fillStyle = '#94a3b8';
-          ctx.font = '12px sans-serif';
-          ctx.fillText(`[SECTION: ${curQ.category.toUpperCase()}]`, 240, 102);
+          ctx.font = '11px sans-serif';
+          ctx.fillText(`[SECTION: ${curQ.category.toUpperCase()}]`, leftX + 220, topY + 78);
         }
 
         if (curQ?.points) {
           ctx.fillStyle = '#38bdf8';
-          ctx.font = '12px sans-serif';
-          ctx.fillText(`(${curQ.points} Pts)`, 680, 102);
+          ctx.font = '11px sans-serif';
+          ctx.fillText(`(${curQ.points} Pts)`, leftX + 650, topY + 78);
         }
 
         // Question Text (Cleanly wrapped)
         ctx.fillStyle = '#f8fafc';
-        ctx.font = '16px sans-serif';
+        ctx.font = '15px sans-serif';
         const qText = curQ?.question_text || 'Active examination session in progress.';
-        wrapCanvasText(ctx, qText, 44, 145, 690, 24, 4);
+        wrapCanvasText(ctx, qText, leftX + 24, topY + 120, leftW - 48, 22, bannerH > 0 ? 3 : 4);
 
         // Render Candidate Response / Options
+        const optStartY = bannerH > 0 ? topY + 205 : topY + 225;
         if (curQ?.options && Array.isArray(curQ.options) && curQ.options.length > 0) {
-          let optY = 265;
-          curQ.options.slice(0, 5).forEach((opt, oIdx) => {
+          let optY = optStartY;
+          curQ.options.slice(0, 4).forEach((opt, oIdx) => {
             const optLetter = String.fromCharCode(65 + oIdx);
             const isSelected = String(curAns || '').trim().toLowerCase() === optLetter.toLowerCase() ||
               String(curAns || '').trim().toLowerCase() === String(opt).trim().toLowerCase();
 
             ctx.fillStyle = isSelected ? 'rgba(197, 160, 89, 0.22)' : 'rgba(255, 255, 255, 0.03)';
-            ctx.fillRect(44, optY - 20, 690, 38);
+            ctx.fillRect(leftX + 24, optY - 18, leftW - 48, 34);
             ctx.strokeStyle = isSelected ? '#c5a059' : 'rgba(255, 255, 255, 0.1)';
             ctx.lineWidth = isSelected ? 1.5 : 1;
-            ctx.strokeRect(44, optY - 20, 690, 38);
+            ctx.strokeRect(leftX + 24, optY - 18, leftW - 48, 34);
 
             ctx.fillStyle = isSelected ? '#c5a059' : '#94a3b8';
-            ctx.font = isSelected ? 'bold 14px sans-serif' : '14px sans-serif';
-            const optLabel = `[${isSelected ? '✓ SELECTED' : ' '}]  (${optLetter})  ${String(opt).slice(0, 70)}`;
-            ctx.fillText(optLabel, 58, optY + 4);
+            ctx.font = isSelected ? 'bold 13px sans-serif' : '13px sans-serif';
+            const optLabel = `[${isSelected ? '✓ SELECTED' : ' '}]  (${optLetter})  ${String(opt).slice(0, 68)}`;
+            ctx.fillText(optLabel, leftX + 36, optY + 4);
 
-            optY += 48;
+            optY += 42;
           });
         } else if (curQ?.q_type === 'short_essay' || curQ?.q_type === 'theory') {
+          const essayH = bannerH > 0 ? 190 : 230;
           ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-          ctx.fillRect(44, 250, 690, 240);
+          ctx.fillRect(leftX + 24, optStartY - 10, leftW - 48, essayH);
           ctx.strokeStyle = 'rgba(197, 160, 89, 0.35)';
-          ctx.strokeRect(44, 250, 690, 240);
+          ctx.strokeRect(leftX + 24, optStartY - 10, leftW - 48, essayH);
 
           ctx.fillStyle = '#a1a1aa';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText('STUDENT TYPED THEORY / ESSAY RESPONSE:', 56, 275);
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText('STUDENT TYPED THEORY / ESSAY RESPONSE:', leftX + 36, optStartY + 14);
 
           ctx.fillStyle = '#f4f4f5';
-          ctx.font = '13px monospace';
+          ctx.font = '12px monospace';
           const typed = typeof curAns === 'string' && curAns.trim() ? curAns : '(No written response entered yet)';
-          wrapCanvasText(ctx, typed.slice(0, 480), 56, 305, 665, 20, 8);
+          wrapCanvasText(ctx, typed.slice(0, 420), leftX + 36, optStartY + 38, leftW - 72, 18, 7);
         } else {
           // Standard answer preview
           ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-          ctx.fillRect(44, 250, 690, 80);
+          ctx.fillRect(leftX + 24, optStartY - 10, leftW - 48, 70);
           ctx.strokeStyle = 'rgba(197, 160, 89, 0.3)';
-          ctx.strokeRect(44, 250, 690, 80);
+          ctx.strokeRect(leftX + 24, optStartY - 10, leftW - 48, 70);
           ctx.fillStyle = '#c5a059';
           ctx.font = '13px sans-serif';
-          ctx.fillText(`Recorded Response: ${String(curAns || '(Unanswered)')}`, 58, 296);
+          ctx.fillText(`Recorded Response: ${String(curAns || '(Unanswered)')}`, leftX + 38, optStartY + 32);
         }
 
-        // Right Panel: Live Front Camera & Candidate Security Meta (484 x 650)
+        // Right Panel: Live Front Camera & Candidate Security Meta (484 x panelsHeight)
         const rightX = 780;
         const rightW = 484;
 
         ctx.fillStyle = '#121622';
-        ctx.fillRect(rightX, 16, rightW, 650);
-        ctx.strokeStyle = 'rgba(197, 160, 89, 0.5)';
+        ctx.fillRect(rightX, topY, rightW, panelsHeight);
+        ctx.strokeStyle = isAwayTrigger ? 'rgba(239, 68, 68, 0.45)' : 'rgba(197, 160, 89, 0.5)';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(rightX, 16, rightW, 650);
+        ctx.strokeRect(rightX, topY, rightW, panelsHeight);
 
         // Header for Camera Panel
         ctx.fillStyle = '#181f2e';
-        ctx.fillRect(rightX, 16, rightW, 48);
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillText(isIOS ? '🔴 LIVE iOS SURVEILLANCE FEED' : '🔴 LIVE MOBILE SURVEILLANCE FEED', rightX + 20, 46);
+        ctx.fillRect(rightX, topY, rightW, 46);
+        ctx.fillStyle = isAwayTrigger ? '#ef4444' : '#ef4444';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(isIOS ? '🔴 LIVE iOS FORENSIC FEED' : '🔴 LIVE MOBILE FORENSIC FEED', rightX + 16, topY + 28);
 
         ctx.fillStyle = '#38bdf8';
         ctx.font = '11px sans-serif';
-        ctx.fillText('FACIAL & GAZE MONITOR', rightX + 320, 46);
+        ctx.fillText('BIOMETRIC GAZE HUD', rightX + 330, topY + 28);
 
         // Draw Front Camera Video
         const camVideo = webcamVideoElRef.current;
         const vidW = rightW - 32;
-        const vidH = Math.round(vidW * 0.75); // 452 x 339
+        const vidH = bannerH > 0 ? 290 : 330;
         const vidX = rightX + 16;
-        const vidY = 80;
+        const vidY = topY + 54;
 
         if (camVideo && camVideo.videoWidth > 0) {
           ctx.drawImage(camVideo, vidX, vidY, vidW, vidH);
-          ctx.strokeStyle = '#c5a059';
+          ctx.strokeStyle = isAwayTrigger ? '#ef4444' : '#c5a059';
           ctx.lineWidth = 2;
           ctx.strokeRect(vidX, vidY, vidW, vidH);
 
-          // Video caption banner
-          ctx.fillStyle = 'rgba(10, 13, 20, 0.85)';
-          ctx.fillRect(vidX, vidY + vidH - 26, vidW, 26);
-          ctx.fillStyle = '#fff';
-          ctx.font = '11px sans-serif';
-          ctx.fillText(`CAMERA: ${profile?.full_name?.slice(0, 26) || 'Candidate'}`, vidX + 10, vidY + vidH - 8);
+          // Apply Forensic Biometric HUD Targeting Reticle & Watermark over Camera Feed
+          drawForensicHUD(ctx, vidX, vidY, vidW, vidH, {
+            isBreach: isDepartureTrigger || isReturnTrigger,
+            isAway: isDepartureTrigger,
+            strikes: currentStrikes,
+            matricNo: profile?.matriculation_number || user?.email || '',
+            candidateName: profile?.full_name || '',
+            timestamp: now
+          });
         } else {
           ctx.fillStyle = '#0b0d14';
           ctx.fillRect(vidX, vidY, vidW, vidH);
@@ -572,94 +837,135 @@ const StudentFlow = () => {
           ctx.strokeRect(vidX, vidY, vidW, vidH);
           ctx.fillStyle = '#64748b';
           ctx.font = '13px sans-serif';
-          ctx.fillText('Front camera feed initializing...', vidX + 120, vidY + 160);
+          ctx.fillText('Front camera feed initializing...', vidX + 110, vidY + 150);
         }
 
         // Candidate Biometric Metadata Card below video
-        const metaY = vidY + vidH + 16;
-        const metaH = 650 - (metaY - 16) - 16;
+        const metaY = vidY + vidH + 12;
+        const metaH = panelsHeight - (metaY - topY) - 10;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
         ctx.fillRect(vidX, metaY, vidW, metaH);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.strokeStyle = isAwayTrigger ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.08)';
         ctx.strokeRect(vidX, metaY, vidW, metaH);
 
         ctx.fillStyle = '#c5a059';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('CANDIDATE BIOMETRIC PROFILE', vidX + 14, metaY + 24);
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('CANDIDATE BIOMETRIC AUDIT PROFILE', vidX + 14, metaY + 22);
 
         ctx.fillStyle = '#e2e8f0';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`Candidate: ${profile?.full_name || 'Student'}`, vidX + 14, metaY + 48);
-        ctx.fillText(`Matric No: ${profile?.matriculation_number || user?.email || 'N/A'}`, vidX + 14, metaY + 70);
-        ctx.fillText(`Device Mode: ${isIOS ? 'Apple iOS • Option 4 (Canvas & Camera)' : 'Mobile Device • Live Camera & Canvas'}`, vidX + 14, metaY + 92);
-        ctx.fillText(`Active Question: #${curIdx + 1} of ${qList.length}`, vidX + 14, metaY + 114);
+        ctx.font = '11px sans-serif';
+        ctx.fillText(`Candidate: ${profile?.full_name || 'Student'}`, vidX + 14, metaY + 44);
+        ctx.fillText(`Matric No: ${profile?.matriculation_number || user?.email || 'N/A'}`, vidX + 14, metaY + 64);
+        ctx.fillText(`Device Mode: ${isIOS ? 'Apple iOS • Option 4 (Canvas & Camera)' : 'Mobile • Live Camera & Canvas'}`, vidX + 14, metaY + 84);
+        ctx.fillText(`Active Question: #${curIdx + 1} of ${qList.length} (${curQ?.points || 5} Pts)`, vidX + 14, metaY + 104);
 
-        ctx.fillStyle = '#22c55e';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('● REAL-TIME SURVEILLANCE & TAB MONITORING ACTIVE', vidX + 14, metaY + 142);
+        if (isDepartureTrigger) {
+          ctx.fillStyle = '#ef4444';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText('🚨 EVENT: CANDIDATE DEFECTED / NAVIGATED AWAY', vidX + 14, metaY + 128);
+        } else if (isReturnTrigger) {
+          ctx.fillStyle = '#f59e0b';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText(`🚨 EVENT: RETURNED AFTER ${meta.breachDurationSec || '?'}s ABSENCE`, vidX + 14, metaY + 128);
+        } else if (isAwayTrigger) {
+          ctx.fillStyle = '#ef4444';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText('🚨 EVENT: SUSPECTED TAB / FOCUS INTERRUPTION', vidX + 14, metaY + 128);
+        } else {
+          ctx.fillStyle = '#22c55e';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText('● REAL-TIME FORENSIC SURVEILLANCE ACTIVE', vidX + 14, metaY + 128);
+        }
       } else {
         // ========================================================
         // STANDARD DESKTOP / ANDROID SCREEN CAPTURE
         // ========================================================
-        ctx.fillStyle = '#0a0a0c';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const contentY = bannerH;
+        const contentH = canvas.height - contentY - barH;
 
         // Primary visual: candidate's active screen
         if (screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0) {
-          ctx.drawImage(screenVideoElRef.current, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(screenVideoElRef.current, 0, contentY, canvas.width, contentH);
         } else if (webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0) {
-          ctx.drawImage(webcamVideoElRef.current, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(webcamVideoElRef.current, 0, contentY, canvas.width, contentH);
         }
 
-        // Picture-in-Picture: Candidate face webcam in top-right corner
+        // Picture-in-Picture: Candidate face webcam in top-right corner with Forensic HUD
         if (
           screenVideoElRef.current && screenVideoElRef.current.videoWidth > 0 &&
           webcamVideoElRef.current && webcamVideoElRef.current.videoWidth > 0
         ) {
-          const pipW = 240;
-          const pipH = 180;
+          const pipW = 250;
+          const pipH = 185;
           const pipX = canvas.width - pipW - 16;
-          const pipY = 16;
+          const pipY = bannerH + 14;
 
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
           ctx.fillRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
-          ctx.strokeStyle = '#c5a059';
+          ctx.strokeStyle = isAwayTrigger ? '#ef4444' : '#c5a059';
           ctx.lineWidth = 2;
           ctx.strokeRect(pipX - 3, pipY - 3, pipW + 6, pipH + 6);
 
           ctx.drawImage(webcamVideoElRef.current, pipX, pipY, pipW, pipH);
 
-          ctx.fillStyle = 'rgba(10, 10, 12, 0.85)';
-          ctx.fillRect(pipX, pipY + pipH - 24, pipW, 24);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '11px sans-serif';
-          ctx.fillText(`CAM: ${profile?.full_name?.slice(0, 20) || 'Candidate'}`, pipX + 8, pipY + pipH - 8);
+          // Apply Forensic Biometric HUD over webcam PiP feed
+          drawForensicHUD(ctx, pipX, pipY, pipW, pipH, {
+            isBreach: isDepartureTrigger || isReturnTrigger,
+            isAway: isDepartureTrigger,
+            strikes: currentStrikes,
+            matricNo: profile?.matriculation_number || user?.email || '',
+            candidateName: profile?.full_name || '',
+            timestamp: now
+          });
         }
       }
 
       // Proctoring audit security footer watermark across bottom of all snapshots
-      const barH = 36;
-      ctx.fillStyle = 'rgba(10, 10, 14, 0.94)';
-      ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
-      ctx.strokeStyle = 'rgba(197, 160, 89, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0, canvas.height - barH, canvas.width, barH);
+      const barY = canvas.height - barH;
+      ctx.fillStyle = isAwayTrigger ? 'rgba(60, 6, 6, 0.98)' : 'rgba(8, 10, 16, 0.96)';
+      ctx.fillRect(0, barY, canvas.width, barH);
+      ctx.strokeStyle = isAwayTrigger ? '#ef4444' : 'rgba(197, 160, 89, 0.45)';
+      ctx.lineWidth = isAwayTrigger ? 2 : 1;
+      ctx.strokeRect(0, barY, canvas.width, barH);
 
-      ctx.fillStyle = '#c5a059';
-      ctx.font = 'bold 12px sans-serif';
-      const watermarkTitle = isIOS ? 'DTMD iOS PROCTOR (OPTION 4)' : isMobileProctor ? 'DTMD MOBILE PROCTOR' : 'DTMD STRICT SCREEN PROCTOR';
-      ctx.fillText(watermarkTitle, 14, canvas.height - 14);
+      // Left Badge
+      let leftTitle = '🛡️ ZIBI ACADEMY & SSN STRICT PROCTOR';
+      if (isDepartureTrigger) {
+        leftTitle = '🚨 BREACH SEQ 1/2: DEPARTURE FRAME';
+      } else if (isReturnTrigger) {
+        leftTitle = `🚨 BREACH SEQ 2/2: RETURN (${meta.breachDurationSec || '?'}s AWAY)`;
+      } else if (isIOS) {
+        leftTitle = 'DTMD iOS PROCTOR (OPTION 4)';
+      } else if (isMobileProctor) {
+        leftTitle = 'DTMD MOBILE PROCTOR';
+      }
 
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = '12px sans-serif';
-      const timeStr = new Date(now).toLocaleString();
-      const candStr = `${profile?.full_name || 'Student'} (${profile?.matriculation_number || user?.email || 'N/A'})`;
-      ctx.fillText(` | Candidate: ${candStr} | Event: ${trigger.toUpperCase()} | ${timeStr}`, isIOS ? 230 : isMobileProctor ? 200 : 220, canvas.height - 14);
+      ctx.fillStyle = isAwayTrigger ? '#fca5a5' : '#c5a059';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(leftTitle, 14, barY + 24);
 
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.70));
+      // Candidate and Event details
+      ctx.fillStyle = isAwayTrigger ? '#fecaca' : '#e2e8f0';
+      ctx.font = '11px sans-serif';
+      const candStr = `${profile?.full_name || 'Candidate'} (${profile?.matriculation_number || user?.email || 'N/A'})`;
+      const qInfo = `Q#${curIdx + 1}`;
+      const triggerText = trigger.toUpperCase().replace(/_/g, ' ');
+      const midText = `| Candidate: ${candStr} | ${qInfo} | Event: ${triggerText}`;
+      ctx.fillText(midText, 340, barY + 24);
+
+      // Right: Strikes & Millisecond UTC
+      const strikeStr = `STRIKES: ${currentStrikes}/3`;
+      const timeStr = new Date(now).toISOString().replace('T', ' ').substring(0, 23) + 'Z';
+      ctx.fillStyle = isAwayTrigger ? '#fde047' : '#38bdf8';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${strikeStr} | ${timeStr}`, canvas.width - 14, barY + 24);
+      ctx.textAlign = 'left';
+
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.72));
       if (!blob) return null;
 
-      const path = `${user.id}/${activeExam?.id || 'exam'}/${now}-${trigger}.jpg`;
+      const path = `${user.id}/${activeExam?.id || activeExamRef.current?.id || 'exam'}/${now}-${trigger}.jpg`;
       const { error } = await supabase.storage.from('proctoring-evidence').upload(path, blob, {
         contentType: 'image/jpeg',
         upsert: false
@@ -984,7 +1290,7 @@ const StudentFlow = () => {
 
   const logInfraction = async (type, details, opts = {}) => {
     if (!activeExam || !user) return;
-    const { severity = 'low', durationSeconds = null, captureEvidence = false } = opts;
+    const { severity = 'low', durationSeconds = null, captureEvidence = false, overrideEvidencePath = null } = opts;
 
     const qNum = (currentQuestionIndexRef.current || 0) + 1;
     const totalQs = (questionsRef.current?.length) || (questions?.length) || 1;
@@ -995,8 +1301,8 @@ const StudentFlow = () => {
     // Only bother capturing a frame for events actually worth an examiner's
     // attention — info/low noise (a stray blur under the threshold) doesn't
     // need a photo, which also keeps storage/bandwidth sane.
-    let evidence_path = null;
-    if (captureEvidence && (severity === 'medium' || severity === 'high')) {
+    let evidence_path = overrideEvidencePath;
+    if (!evidence_path && captureEvidence && (severity === 'medium' || severity === 'high')) {
       evidence_path = await captureSnapshot(type, true);
     }
 
@@ -1050,33 +1356,87 @@ const StudentFlow = () => {
     if (examState !== 'taking_exam') return;
 
     // Single source of truth for away-from-exam tracking - eliminates race conditions & Set deadlocks
-    const recordAwayStart = (reason) => {
+    const recordAwayStart = async (reason) => {
       if (awaySinceRef.current === null) {
-        awaySinceRef.current = Date.now();
+        const depTime = Date.now();
+        awaySinceRef.current = depTime;
         awayReasonRef.current = reason;
-        // Immediately take evidence snapshot upon departure
-        latestCaptureSnapshotRef.current?.('navigated_away', true);
+        lastDepartureTimeRef.current = depTime;
+
+        // Immediately take evidence snapshot upon departure - FRAME 1 (DEPARTURE)
+        try {
+          const depPath = await latestCaptureSnapshotRef.current?.('tab_departure', true, {
+            isDeparture: true,
+            departureTime: depTime,
+            reason
+          });
+          if (depPath) {
+            lastDeparturePathRef.current = depPath;
+            try {
+              await supabase.from('proctoring_snapshots').insert({
+                candidate_id: user.id,
+                assessment_id: activeExamRef.current?.id,
+                evidence_path: depPath,
+                trigger_type: 'tab_departure'
+              });
+            } catch (snapErr) {
+              console.warn('Silent note: proctoring_snapshots table write skipped:', snapErr?.message);
+            }
+          }
+        } catch (err) {
+          console.warn('Departure snapshot capture error:', err);
+        }
       }
     };
 
-    const recordAwayReturn = () => {
+    const recordAwayReturn = async () => {
       if (awaySinceRef.current === null) return;
       const departureTime = awaySinceRef.current;
       const departureReason = awayReasonRef.current || 'tab_switch';
+      const returnTime = Date.now();
       awaySinceRef.current = null;
       awayReasonRef.current = null;
 
-      const durationSec = Math.max(1, Math.round((Date.now() - departureTime) / 1000));
+      const durationSec = Math.max(1, Math.round((returnTime - departureTime) / 1000));
 
       if (departureReason === 'tab_switch_hidden' || departureReason === 'pagehide') {
         genuineAwayCountRef.current = (genuineAwayCountRef.current || 0) + 1;
         const severity = durationSec >= 10 ? 'high' : (durationSec >= 4 ? 'high' : 'medium');
-        const desc = `Switched away to another browser tab or minimized window (${durationSec}s away to search or browse external resources)`;
+
+        // Immediately take evidence snapshot upon return - FRAME 2 (RETURN)
+        let returnPath = null;
+        try {
+          returnPath = await latestCaptureSnapshotRef.current?.('tab_return', true, {
+            isReturn: true,
+            departureTime,
+            returnTime,
+            breachDurationSec: durationSec,
+            departureSnapshotPath: lastDeparturePathRef.current
+          });
+          if (returnPath) {
+            try {
+              await supabase.from('proctoring_snapshots').insert({
+                candidate_id: user.id,
+                assessment_id: activeExamRef.current?.id,
+                evidence_path: returnPath,
+                trigger_type: 'tab_return'
+              });
+            } catch (snapErr) {
+              console.warn('Silent note: proctoring_snapshots table write skipped:', snapErr?.message);
+            }
+          }
+        } catch (err) {
+          console.warn('Return snapshot capture error:', err);
+        }
+
+        const depStr = new Date(departureTime).toLocaleTimeString();
+        const retStr = new Date(returnTime).toLocaleTimeString();
+        const desc = `Switched away to another browser tab or minimized window [${durationSec}s away: ${depStr} -> ${retStr}]. Dual-frame evidence logged (Departure & Return).`;
 
         latestLogInfractionRef.current?.(
           'tab_or_window_switch',
           desc,
-          { severity, durationSeconds: durationSec, captureEvidence: true }
+          { severity, durationSeconds: durationSec, captureEvidence: false, overrideEvidencePath: returnPath || undefined }
         );
 
         latestRecordMalpracticeStrikeRef.current?.(
@@ -1084,19 +1444,31 @@ const StudentFlow = () => {
         );
 
         toast.error(
-          `🚨 PROHIBITED TAB SWITCH DETECTED: You navigated away from the exam for ${durationSec}s. Tab switching to search for answers is strictly prohibited and recorded as malpractice!`,
+          `🚨 PROHIBITED TAB SWITCH DETECTED: You navigated away from the exam for ${durationSec}s (${depStr} to ${retStr}). Dual-frame evidence logged for school audit!`,
           { duration: 7000, style: { background: '#1c1917', color: '#fca5a5', border: '2px solid #ef4444' } }
         );
       } else if (departureReason === 'window_blur') {
         if (durationSec < 2) return; // ignore micro focus change under 2s
 
         const severity = durationSec >= 8 ? 'high' : 'medium';
+        let blurReturnPath = null;
+        try {
+          blurReturnPath = await latestCaptureSnapshotRef.current?.('window_blur_return', true, {
+            isReturn: true,
+            departureTime,
+            returnTime,
+            breachDurationSec: durationSec
+          });
+        } catch (blurErr) {
+          console.warn('Blur return snapshot capture note:', blurErr?.message);
+        }
+
         const desc = `Exam window lost focus to external application or overlay (${durationSec}s duration)`;
 
         latestLogInfractionRef.current?.(
           'window_blur',
           desc,
-          { severity, durationSeconds: durationSec, captureEvidence: true }
+          { severity, durationSeconds: durationSec, captureEvidence: false, overrideEvidencePath: blurReturnPath || undefined }
         );
 
         if (durationSec >= 6) {

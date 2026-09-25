@@ -2173,7 +2173,7 @@ const ExaminerFlow = () => {
                           </span>
 
                           <div style={{ display: 'flex', gap: '0.3rem' }}>
-                            {['all', 'heartbeat', 'infraction'].map(f => (
+                            {['all', 'heartbeat', 'breach', 'infraction'].map(f => (
                               <button
                                 key={f}
                                 type="button"
@@ -2182,14 +2182,14 @@ const ExaminerFlow = () => {
                                   padding: '0.2rem 0.55rem',
                                   fontSize: '0.75rem',
                                   borderRadius: '4px',
-                                  border: `1px solid ${snapshotFilter === f ? 'var(--accent-gold)' : 'rgba(255,255,255,0.1)'}`,
-                                  background: snapshotFilter === f ? 'rgba(197,160,89,0.15)' : 'transparent',
-                                  color: snapshotFilter === f ? 'var(--accent-gold)' : 'var(--text-muted)',
+                                  border: `1px solid ${snapshotFilter === f ? (f === 'breach' ? '#ef4444' : 'var(--accent-gold)') : 'rgba(255,255,255,0.1)'}`,
+                                  background: snapshotFilter === f ? (f === 'breach' ? 'rgba(239,68,68,0.2)' : 'rgba(197,160,89,0.15)') : 'transparent',
+                                  color: snapshotFilter === f ? (f === 'breach' ? '#fca5a5' : 'var(--accent-gold)') : 'var(--text-muted)',
                                   cursor: 'pointer',
                                   textTransform: 'capitalize'
                                 }}
                               >
-                                {f}
+                                {f === 'breach' ? '🚨 Breach Windows' : f}
                               </button>
                             ))}
                           </div>
@@ -2322,6 +2322,7 @@ const ExaminerFlow = () => {
                         (() => {
                           const displayed = allSnapshots.filter(s => {
                             if (snapshotFilter === 'heartbeat') return s.rawTrigger === 'heartbeat';
+                            if (snapshotFilter === 'breach') return s.rawTrigger.includes('departure') || s.rawTrigger.includes('return') || s.rawTrigger.includes('away');
                             if (snapshotFilter === 'infraction') return s.rawTrigger !== 'heartbeat';
                             return true;
                           });
@@ -2330,6 +2331,10 @@ const ExaminerFlow = () => {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem', maxHeight: '340px', overflowY: 'auto', padding: '0.5rem', background: 'var(--bg-obsidian)', borderRadius: '6px' }}>
                               {displayed.map((snap, idx) => {
                                 const isCurrent = allSnapshots.indexOf(snap) === activeReelIndex;
+                                const isDeparture = snap.rawTrigger.includes('departure') || snap.rawTrigger.includes('away');
+                                const isReturn = snap.rawTrigger.includes('return');
+                                const isBreach = isDeparture || isReturn;
+
                                 return (
                                   <div
                                     key={snap.id || idx}
@@ -2339,12 +2344,16 @@ const ExaminerFlow = () => {
                                     }}
                                     style={{
                                       background: 'rgba(255,255,255,0.03)',
-                                      border: `1px solid ${isCurrent ? 'var(--accent-gold)' : 'rgba(255,255,255,0.08)'}`,
+                                      border: isCurrent
+                                        ? '1px solid var(--accent-gold)'
+                                        : isBreach
+                                        ? '1px solid rgba(239, 68, 68, 0.4)'
+                                        : '1px solid rgba(255,255,255,0.08)',
                                       borderRadius: '4px',
                                       overflow: 'hidden',
                                       cursor: 'pointer',
                                       transition: 'all 0.15s ease',
-                                      boxShadow: isCurrent ? '0 0 8px rgba(197,160,89,0.3)' : 'none'
+                                      boxShadow: isCurrent ? '0 0 8px rgba(197,160,89,0.3)' : (isBreach ? '0 0 6px rgba(239,68,68,0.2)' : 'none')
                                     }}
                                   >
                                     <div style={{ position: 'relative', width: '100%', height: '105px', background: '#000' }}>
@@ -2357,14 +2366,28 @@ const ExaminerFlow = () => {
                                         position: 'absolute',
                                         top: '4px',
                                         left: '4px',
-                                        fontSize: '0.65rem',
-                                        padding: '0.1rem 0.35rem',
+                                        fontSize: '0.62rem',
+                                        padding: '0.12rem 0.38rem',
                                         borderRadius: '2px',
                                         fontWeight: 'bold',
-                                        background: snap.rawTrigger === 'heartbeat' ? 'rgba(30, 58, 138, 0.9)' : 'rgba(185, 28, 28, 0.9)',
-                                        color: '#fff'
+                                        background: isDeparture
+                                          ? 'rgba(220, 38, 38, 0.95)'
+                                          : isReturn
+                                          ? 'rgba(217, 119, 6, 0.95)'
+                                          : snap.rawTrigger === 'heartbeat'
+                                          ? 'rgba(30, 58, 138, 0.9)'
+                                          : 'rgba(185, 28, 28, 0.9)',
+                                        color: '#fff',
+                                        border: isBreach ? '1px solid #fca5a5' : 'none',
+                                        letterSpacing: '0.02em'
                                       }}>
-                                        {snap.rawTrigger === 'heartbeat' ? '5S SNAP' : snap.trigger.slice(0, 14)}
+                                        {snap.rawTrigger === 'heartbeat'
+                                          ? '5S SNAP'
+                                          : isDeparture
+                                          ? '🚪 DEPARTURE'
+                                          : isReturn
+                                          ? '↩️ RETURN'
+                                          : snap.trigger.slice(0, 14)}
                                       </span>
                                       <button
                                         type="button"
@@ -2986,6 +3009,40 @@ const ExaminerFlow = () => {
                 </button>
               </div>
             </div>
+
+            {(lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('return') || lightboxSnapshot.rawTrigger.includes('away')) && (
+              <div style={{
+                background: lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('away') ? 'rgba(127, 29, 29, 0.45)' : 'rgba(180, 83, 9, 0.45)',
+                borderBottom: `2px solid ${lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('away') ? '#ef4444' : '#f59e0b'}`,
+                padding: '0.65rem 1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.8rem',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>
+                    {lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('away') ? '🚪' : '↩️'}
+                  </span>
+                  <div>
+                    <strong style={{ color: lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('away') ? '#fca5a5' : '#fde047', fontSize: '0.88rem' }}>
+                      {lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('away')
+                        ? 'DUAL-FRAME BREACH SEQUENCE: FRAME 1 (DEPARTURE DETECTED)'
+                        : 'DUAL-FRAME BREACH SEQUENCE: FRAME 2 (RETURN RE-ACQUISITION)'}
+                    </strong>
+                    <p style={{ margin: '0.15rem 0 0', fontSize: '0.78rem', color: '#fecaca' }}>
+                      {lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('away')
+                        ? 'Captured at the instant the candidate navigated away or switched tabs. Inspect the recorded response state and front-facing camera.'
+                        : 'Captured upon candidate re-entering the examination viewport. Inspect the elapsed absence watermark banner and biometric HUD.'}
+                    </p>
+                  </div>
+                </div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.2)', padding: '0.25rem 0.65rem', borderRadius: '4px', color: '#fff' }}>
+                  {lightboxSnapshot.rawTrigger.includes('departure') || lightboxSnapshot.rawTrigger.includes('away') ? 'BREACH INITIATION' : 'BREACH RESOLUTION'}
+                </span>
+              </div>
+            )}
 
             <div style={{
               flex: 1,
