@@ -1,0 +1,8 @@
+{
+  "name": "DTMD Academy",
+  "description": "Comprehensive academic assessment and proctored examination platform with continuous surveillance and anti-malpractice enforcement.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "permissions": []
+}

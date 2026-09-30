@@ -75,6 +75,15 @@ const StudentFlow = () => {
   const awaySinceRef = React.useRef(null);
   const awaySignalsRef = React.useRef(new Set());
 
+  // Proctoring and state sync refs (prevent stale closures during anti-cheat event handling)
+  const answersRef = React.useRef(answers);
+  const currentQuestionIndexRef = React.useRef(currentQuestionIndex);
+  const timeLeftRef = React.useRef(timeLeft);
+  const categoryTimeLeftRef = React.useRef(categoryTimeLeft);
+  const activeQuestionRef = React.useRef(null);
+  const questionsRef = React.useRef(questions);
+  const isBlendedRef = React.useRef(isBlended);
+
   // Takes examId explicitly rather than reading `activeExam` state, since
   // this runs from inside startExam() before the setActiveExam() update
   // has actually landed — reading state here would silently no-op.
@@ -214,7 +223,7 @@ const StudentFlow = () => {
       }
     }
     const draftData = {
-      answers,
+      answers: answersRef.current || answers,
       timeLeft,
       activeCategoryIndex,
       completedCategories,
@@ -373,12 +382,12 @@ const StudentFlow = () => {
 
   const logInfraction = async (type, details, opts = {}) => {
     if (!activeExam || !user) return;
-    const { severity = 'low', durationSeconds = null, captureEvidence = false } = opts;
+    const { severity = 'low', durationSeconds = null, captureEvidence = false, rawDetails = false } = opts;
 
-    const qNum = currentQuestionIndex + 1;
-    const totalQs = questions.length;
-    const timeRemaining = formatTime(isBlended ? categoryTimeLeft : timeLeft);
-    const enriched = `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
+    const qNum = currentQuestionIndexRef.current + 1;
+    const totalQs = questionsRef.current.length || 1;
+    const timeRemaining = formatTime(isBlendedRef.current ? categoryTimeLeftRef.current : timeLeftRef.current);
+    const enriched = rawDetails ? details : `[Q${qNum}/${totalQs} | ${timeRemaining} remaining] ${details}`;
 
     // Only bother capturing a frame for events actually worth an examiner's
     // attention — info/low noise (a stray blur under the threshold) doesn't
@@ -401,6 +410,136 @@ const StudentFlow = () => {
     if (error) {
       infractionQueue.current.push(payload);
       processInfractionQueue();
+    }
+  };
+
+  // Intercept and prevent copy/paste/cut/drop actions and log the attempted content, timestamp, and question
+  const handleProhibitedClipboardAction = async (actionType, e, explicitQuestion = null, explicitQNum = null, explicitTotalQs = null) => {
+    // 1. Immediately prevent default and stop propagation so browser CANNOT insert or copy text
+    if (e) {
+      if (e._handledByProctor) return;
+      e._handledByProctor = true;
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+
+    if (!activeExam || !user) return;
+
+    // 2. Identify the active question details
+    const currentQ = explicitQuestion || activeQuestionRef.current || (questionsRef.current && questionsRef.current[currentQuestionIndexRef.current]) || null;
+    const totalQs = explicitTotalQs || (questionsRef.current ? questionsRef.current.length : 1);
+    const qNum = explicitQNum || (currentQuestionIndexRef.current + 1);
+    const qType = (currentQ?.q_type || 'question').toUpperCase();
+    const qText = currentQ?.question_text || '';
+    const qSnippet = qText ? (qText.length > 70 ? qText.substring(0, 70) + '...' : qText) : 'N/A';
+
+    // 3. Time tracking (time of day and exam countdown remaining)
+    const timeRemainingStr = formatTime(isBlendedRef.current ? categoryTimeLeftRef.current : timeLeftRef.current);
+    const exactTime = new Date().toLocaleTimeString();
+
+    if (actionType === 'paste') {
+      // 4. Capture what the student tried to paste in
+      let pastedContent = '';
+      if (e && e.clipboardData) {
+        try {
+          pastedContent = e.clipboardData.getData('text/plain') || e.clipboardData.getData('text') || '';
+        } catch (err) { void err; }
+      } else if (typeof window !== 'undefined' && window.clipboardData) {
+        try {
+          pastedContent = window.clipboardData.getData('Text') || '';
+        } catch (err) { void err; }
+      }
+
+      // Fallback: try navigator.clipboard.readText if clipboardData was empty
+      if (!pastedContent && typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        try {
+          pastedContent = await navigator.clipboard.readText();
+        } catch (err) { void err; }
+      }
+
+      const contentDesc = pastedContent && pastedContent.trim()
+        ? `Attempted to paste content (${pastedContent.length} chars): "${pastedContent.length > 300 ? pastedContent.substring(0, 300) + '... [truncated]' : pastedContent}"`
+        : `Attempted to paste clipboard data (clipboard content empty or restricted by browser)`;
+
+      const details = `[Q${qNum}/${totalQs} | ${timeRemainingStr} remaining | ${exactTime}] [${qType}] Question ${qNum} ("${qSnippet}"): ${contentDesc}`;
+
+      // High severity proctoring log with webcam evidence
+      await logInfraction('paste', details, { severity: 'high', captureEvidence: true, rawDetails: true });
+
+      toast.error('⚠️ Pasting into the exam is strictly prohibited! Your attempted paste content, timestamp, and question have been recorded.', {
+        id: 'paste-blocked-toast',
+        duration: 5000,
+        style: {
+          background: '#2a1215',
+          color: '#f87171',
+          border: '1px solid #dc2626',
+          fontWeight: 600,
+          fontSize: '0.88rem'
+        }
+      });
+    } else if (actionType === 'copy') {
+      let copiedContent = '';
+      try {
+        copiedContent = window.getSelection ? window.getSelection().toString() : '';
+      } catch (err) { void err; }
+
+      // Clear text selection immediately so nothing is taken
+      try {
+        if (window.getSelection) {
+          window.getSelection().removeAllRanges();
+        }
+      } catch (err) { void err; }
+
+      const contentDesc = copiedContent && copiedContent.trim()
+        ? `Attempted to copy content (${copiedContent.length} chars): "${copiedContent.length > 200 ? copiedContent.substring(0, 200) + '... [truncated]' : copiedContent}"`
+        : `Attempted to copy exam screen content`;
+
+      const details = `[Q${qNum}/${totalQs} | ${timeRemainingStr} remaining | ${exactTime}] [${qType}] Question ${qNum} ("${qSnippet}"): ${contentDesc}`;
+
+      await logInfraction('copy', details, { severity: 'medium', captureEvidence: true, rawDetails: true });
+
+      toast.error('⚠️ Copying exam content is strictly prohibited! This attempt has been logged.', {
+        id: 'copy-blocked-toast',
+        duration: 4500,
+        style: {
+          background: '#2a1a12',
+          color: '#fbbf24',
+          border: '1px solid #d97706',
+          fontWeight: 600,
+          fontSize: '0.88rem'
+        }
+      });
+    } else if (actionType === 'cut') {
+      try {
+        if (window.getSelection) window.getSelection().removeAllRanges();
+      } catch (err) { void err; }
+
+      const details = `[Q${qNum}/${totalQs} | ${timeRemainingStr} remaining | ${exactTime}] [${qType}] Attempted to cut content on Question ${qNum} ("${qSnippet}")`;
+      await logInfraction('cut', details, { severity: 'medium', captureEvidence: true, rawDetails: true });
+
+      toast.error('⚠️ Cutting content is disabled during exam!', {
+        id: 'cut-blocked-toast',
+        duration: 4000
+      });
+    } else if (actionType === 'drop') {
+      let droppedContent = '';
+      if (e && e.dataTransfer) {
+        try {
+          droppedContent = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text') || '';
+        } catch (err) { void err; }
+      }
+
+      const contentDesc = droppedContent && droppedContent.trim()
+        ? `Attempted to drag-and-drop text (${droppedContent.length} chars): "${droppedContent.length > 200 ? droppedContent.substring(0, 200) + '... [truncated]' : droppedContent}"`
+        : `Attempted to drag-and-drop content into exam`;
+
+      const details = `[Q${qNum}/${totalQs} | ${timeRemainingStr} remaining | ${exactTime}] [${qType}] Question ${qNum} ("${qSnippet}"): ${contentDesc}`;
+      await logInfraction('drop_paste', details, { severity: 'high', captureEvidence: true, rawDetails: true });
+
+      toast.error('⚠️ Dragging external content into the exam is strictly prohibited! This attempt has been logged.', {
+        id: 'drop-blocked-toast',
+        duration: 4500
+      });
     }
   };
 
@@ -495,15 +634,40 @@ const StudentFlow = () => {
       closeAwayWindowIfDone('blur');
     };
 
-    const preventCopyPaste = (e) => {
-      // Allow clipboard operations inside essay/answer text fields.
-      // Blocking cut/copy/paste inside a <textarea> or <input> would prevent
-      // students from editing their own typed responses -- which was causing
-      // answers to appear empty when submitted after the timer expired.
-      const tag = e.target && e.target.tagName && e.target.tagName.toLowerCase();
-      if (tag === 'textarea' || tag === 'input') return;
+    const handleDocumentPaste = (e) => {
+      handleProhibitedClipboardAction('paste', e);
+    };
+
+    const handleDocumentCopy = (e) => {
+      handleProhibitedClipboardAction('copy', e);
+    };
+
+    const handleDocumentCut = (e) => {
+      handleProhibitedClipboardAction('cut', e);
+    };
+
+    const handleDocumentDrop = (e) => {
+      handleProhibitedClipboardAction('drop', e);
+    };
+
+    const handleDocumentDragOver = (e) => {
       e.preventDefault();
-      logInfraction('copy_paste', `Clipboard action attempted: ${e.type}`, { severity: 'medium', captureEvidence: true });
+    };
+
+    const handleDocumentBeforeInput = (e) => {
+      if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        handleProhibitedClipboardAction('paste', e);
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (isCtrlOrCmd && (e.key === 'c' || e.key === 'C')) {
+        handleProhibitedClipboardAction('copy', e);
+      } else if (isCtrlOrCmd && (e.key === 'x' || e.key === 'X')) {
+        handleProhibitedClipboardAction('cut', e);
+      }
     };
 
     const preventContextMenu = (e) => {
@@ -532,9 +696,13 @@ const StudentFlow = () => {
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
-    document.addEventListener("copy", preventCopyPaste);
-    document.addEventListener("paste", preventCopyPaste);
-    document.addEventListener("cut", preventCopyPaste);
+    document.addEventListener("copy", handleDocumentCopy, true);
+    document.addEventListener("paste", handleDocumentPaste, true);
+    document.addEventListener("cut", handleDocumentCut, true);
+    document.addEventListener("drop", handleDocumentDrop, true);
+    document.addEventListener("dragover", handleDocumentDragOver, true);
+    document.addEventListener("beforeinput", handleDocumentBeforeInput, true);
+    document.addEventListener("keydown", handleKeyDown, true);
     document.addEventListener("contextmenu", preventContextMenu);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -547,16 +715,20 @@ const StudentFlow = () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("copy", preventCopyPaste);
-      document.removeEventListener("paste", preventCopyPaste);
-      document.removeEventListener("cut", preventCopyPaste);
+      document.removeEventListener("copy", handleDocumentCopy, true);
+      document.removeEventListener("paste", handleDocumentPaste, true);
+      document.removeEventListener("cut", handleDocumentCut, true);
+      document.removeEventListener("drop", handleDocumentDrop, true);
+      document.removeEventListener("dragover", handleDocumentDragOver, true);
+      document.removeEventListener("beforeinput", handleDocumentBeforeInput, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("contextmenu", preventContextMenu);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.body.style.userSelect = 'auto';
       document.body.style.webkitUserSelect = 'auto';
     };
-  }, [examState, activeExam, currentQuestionIndex, questions.length, timeLeft, categoryTimeLeft, isBlended]);
+  }, [examState, activeExam?.id]);
 
   // Inactivity auto-submit — deliberately its OWN effect, keyed only on
   // examState. The anti-cheat effect above re-mounts every second (it
@@ -800,8 +972,10 @@ useEffect(() => {
       return;
     }
 
+    const currentAnswers = answersRef.current || answers;
+
     if (!isAutoSubmit) {
-      const unanswered = questions.filter(q => !answers[q.id] || String(answers[q.id]).trim() === '');
+      const unanswered = questions.filter(q => !currentAnswers[q.id] || String(currentAnswers[q.id]).trim() === '');
       if (unanswered.length > 0 && !window.confirm(`You have ${unanswered.length} unanswered question(s). Submit anyway?`)) {
         return;
       }
@@ -815,7 +989,7 @@ useEffect(() => {
     questions.forEach(q => {
       totalPossible += q.points;
       if (q.q_type === 'mcq' || q.q_type === 'true_false') {
-        const studentAns = String(answers[q.id] || '').trim().toLowerCase();
+        const studentAns = String(currentAnswers[q.id] || '').trim().toLowerCase();
         const correctAns = String(q.correct_answer || '').trim().toLowerCase();
         const isCorrect = studentAns === correctAns;
         const pts = isCorrect ? q.points : 0;
@@ -829,7 +1003,7 @@ useEffect(() => {
     const { error } = await supabase.from('candidate_scripts').insert({
       candidate_id: user.id,
       assessment_id: activeExam.id,
-      answers: answers,
+      answers: currentAnswers,
       auto_mcq_score: mcqScore,
       total_possible_score: totalPossible,
       question_scores: questionScores,
@@ -863,6 +1037,12 @@ useEffect(() => {
   latestSubmitExamRef.current = submitExam;
   latestLogInfractionRef.current = logInfraction;
   latestAdvanceRef.current = advanceCategoryOrSubmit;
+  answersRef.current = answers;
+  currentQuestionIndexRef.current = currentQuestionIndex;
+  timeLeftRef.current = timeLeft;
+  categoryTimeLeftRef.current = categoryTimeLeft;
+  questionsRef.current = questions;
+  isBlendedRef.current = isBlended;
 });
 
   const handleAnswerChange = (qId, val) => {
@@ -1260,7 +1440,7 @@ useEffect(() => {
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{activeQ.points} Points</span>
                         </div>
                         
-                        <p style={{ color: 'var(--text-ivory)', marginBottom: '1.5rem', lineHeight: '1.6', fontSize: '1.05rem' }}>
+                        <p style={{ color: 'var(--text-ivory)', marginBottom: '1.5rem', lineHeight: '1.6', fontSize: '1.05rem', userSelect: 'none', WebkitUserSelect: 'none' }}>
                           {activeQ.question_text}
                         </p>
 
@@ -1271,7 +1451,21 @@ useEffect(() => {
                               placeholder="Write your short essay response here..."
                               value={answers[activeQ.id] || ''}
                               onChange={(e) => handleAnswerChange(activeQ.id, e.target.value)}
-                              style={{ width: '100%', minHeight: '220px', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '1rem', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.95rem', resize: 'vertical', outline: 'none', userSelect: 'text', WebkitUserSelect: 'text' }}
+                              onPaste={(e) => handleProhibitedClipboardAction('paste', e, activeQ, safeIndex + 1, displayQuestions.length)}
+                              onCopy={(e) => handleProhibitedClipboardAction('copy', e, activeQ, safeIndex + 1, displayQuestions.length)}
+                              onCut={(e) => handleProhibitedClipboardAction('cut', e, activeQ, safeIndex + 1, displayQuestions.length)}
+                              onDrop={(e) => handleProhibitedClipboardAction('drop', e, activeQ, safeIndex + 1, displayQuestions.length)}
+                              onBeforeInput={(e) => {
+                                if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
+                                  if (typeof e.preventDefault === 'function') e.preventDefault();
+                                  handleProhibitedClipboardAction('paste', e, activeQ, safeIndex + 1, displayQuestions.length);
+                                }
+                              }}
+                              onContextMenu={(e) => {
+                                if (typeof e.preventDefault === 'function') e.preventDefault();
+                                toast.error('Context menu is disabled during the exam.', { id: 'ctx-disabled' });
+                              }}
+                              style={{ width: '100%', minHeight: '220px', background: 'var(--bg-obsidian)', border: '1px solid var(--border-subtle)', color: 'var(--text-ivory)', padding: '1rem', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.95rem', resize: 'vertical', outline: 'none' }}
                               onFocus={(e) => e.target.style.borderColor = 'var(--border-focus)'}
                               onBlur={(e) => e.target.style.borderColor = 'var(--border-subtle)'}
                             />
